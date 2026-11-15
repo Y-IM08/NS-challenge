@@ -31,15 +31,61 @@ function getOption(categoryId, optionId) {
 }
 
 function getEnvironment(environmentIdOrProfile, settings) {
-  if (typeof environmentIdOrProfile === "object" && environmentIdOrProfile !== null) {
-    return environmentIdOrProfile;
-  }
-  const environmentId = environmentIdOrProfile ?? settings.initialEnvironmentId;
+  const environmentId = typeof environmentIdOrProfile === "object" && environmentIdOrProfile !== null
+    ? environmentIdOrProfile.id
+    : environmentIdOrProfile ?? settings.initialEnvironmentId;
   const environment = settings.environmentProfiles.find(({ id }) => id === environmentId);
   if (!environment) {
     throw new RangeError(`Unknown power environment: ${environmentId}`);
   }
+  for (const key of ["daylightFraction", "dustAccumulation", "solarEfficiency"]) {
+    if (!Number.isFinite(environment[key]) || environment[key] < 0 || environment[key] > 1) {
+      throw new RangeError(`Power environment ${environment.id} has an invalid ${key}; expected a value from 0 to 1.`);
+    }
+  }
   return environment;
+}
+
+function validateSettings(settings) {
+  for (const [key, value] of Object.entries({
+    hoursPerSol: settings.hoursPerSol,
+    initialBudgetCredits: settings.initialBudgetCredits,
+    launchCostCredits: settings.launchCostCredits,
+    operationCostCreditsPerHour: settings.operationCostCreditsPerHour,
+    communicationCostCreditsPerHour: settings.communicationCostCreditsPerHour,
+    maintenanceCostCredits: settings.maintenanceCostCredits,
+    batteryCapacityWh: settings.batteryCapacityWh,
+    storageCapacityMB: settings.storageCapacityMB,
+    megabytesPerDataUnit: settings.megabytesPerDataUnit,
+    standbyPowerW: settings.standbyPowerW,
+    maintenancePowerW: settings.maintenancePowerW,
+    maintenanceDurationHours: settings.maintenanceDurationHours,
+    defaultInstrumentOperationHours: settings.defaultInstrumentOperationHours,
+    initialBatteryFraction: settings.initialBatteryFraction,
+    minimumBatteryFraction: settings.minimumBatteryFraction,
+  })) {
+    if (!Number.isFinite(value) || value < 0) {
+      throw new RangeError(`Resource setting ${key} must be a finite, non-negative number.`);
+    }
+  }
+  if (
+    settings.hoursPerSol === 0
+    || settings.megabytesPerDataUnit === 0
+    || settings.defaultInstrumentOperationHours === 0
+    || settings.maintenanceDurationHours === 0
+  ) {
+    throw new RangeError("Hours per sol, data conversion, and operation durations must be greater than zero.");
+  }
+  if (settings.initialBatteryFraction > 1 || settings.minimumBatteryFraction > 1) {
+    throw new RangeError("Battery fractions must be between zero and one.");
+  }
+  if (!Number.isFinite(Date.parse(settings.missionStartTime))) {
+    throw new RangeError("Mission start time must be a valid ISO-8601 timestamp.");
+  }
+  if (!Array.isArray(settings.environmentProfiles) || settings.environmentProfiles.length === 0) {
+    throw new RangeError("At least one power environment must be configured.");
+  }
+  getEnvironment(settings.initialEnvironmentId, settings);
 }
 
 function installedComponents(configuration) {
@@ -55,12 +101,15 @@ function installedComponents(configuration) {
   });
 }
 
-function eventFor(resources, type, description, resourceChanges = {}) {
+function eventFor(resources, type, description, resourceChanges = {}, status = "success") {
   const sequence = resources.events.length + 1;
+  const startTime = Date.parse(resources.missionStartTime);
   const event = {
     eventId: `resource-event-${String(sequence).padStart(4, "0")}`,
     type,
     description,
+    status,
+    timestamp: new Date(startTime + resources.time.elapsedHours * 60 * 60 * 1000).toISOString(),
     simulationTimeHours: resources.time.elapsedHours,
     simulationTime: formatMissionClock(resources.time.elapsedHours, resources.time.hoursPerSol),
     resourceChanges,
@@ -136,6 +185,7 @@ export function calculateEnergyConsumption(
     roverOperatingPowerW + instrumentPowerW + communicationPowerW
     + maintenancePowerW + standbyPowerW,
   );
+  assertFiniteNonNegative(totalPowerW, "Total operation power");
 
   return {
     roverOperatingPowerW,
@@ -181,6 +231,20 @@ export function validatePowerAvailability(
   }
   if (!Number.isFinite(powerState?.batteryEnergyWh) || !Number.isFinite(powerState?.batteryCapacityWh)) {
     errors.push("Battery state is unavailable.");
+  }
+  if (
+    Number.isFinite(powerState?.batteryCapacityWh)
+    && (powerState.batteryCapacityWh < 0 || powerState.batteryEnergyWh < 0
+      || powerState.batteryEnergyWh > powerState.batteryCapacityWh)
+  ) {
+    errors.push("Battery energy must be between zero and the configured capacity.");
+  }
+  if (
+    !Number.isFinite(settings.minimumBatteryFraction)
+    || settings.minimumBatteryFraction < 0
+    || settings.minimumBatteryFraction > 1
+  ) {
+    errors.push("Minimum battery reserve must be a fraction from zero to one.");
   }
   if (errors.length > 0) {
     return { isValid: false, errors, remainingBatteryWh: null };
@@ -252,7 +316,11 @@ function buildResourceStatus(resources) {
   const classify = (fraction, warningAt = 0.25, criticalAt = 0.1) =>
     fraction <= criticalAt ? "critical" : fraction <= warningAt ? "warning" : "normal";
   return {
-    power: battery.status,
+    power: battery.status === "critical"
+      ? "critical"
+      : resources.power.availablePowerW < resources.power.lastLoadW
+        ? "warning"
+        : battery.status,
     budget: classify(budgetFraction),
     data: classify(1 - dataFraction),
     time: classify(timeFraction),
@@ -270,6 +338,7 @@ export function createMissionResources({
   missionDurationSols,
   settings = MISSION_RESOURCE_CONFIG,
 }) {
+  validateSettings(settings);
   if (!Number.isFinite(missionDurationSols) || missionDurationSols <= 0) {
     throw new RangeError("Mission duration must be greater than zero sols.");
   }
@@ -319,6 +388,7 @@ export function createMissionResources({
       constructionCredits: constructionCost,
       launchCredits: settings.launchCostCredits,
       operationsCredits: 0,
+      communicationCredits: 0,
       maintenanceCredits: 0,
       remainingCredits: settings.initialBudgetCredits - initialExpenditure,
     },
@@ -379,11 +449,17 @@ function validateTime(resources, durationHours) {
 }
 
 function calculateOperationCost(mode, durationHours, settings) {
-  const operatingHours = durationHours * settings.operationCostCreditsPerHour;
-  const communicationHours = mode === "transmit"
+  const operationsCredits = mode === "maintenance"
+    ? 0
+    : durationHours * settings.operationCostCreditsPerHour;
+  const communicationCredits = mode === "transmit"
     ? durationHours * settings.communicationCostCreditsPerHour
     : 0;
-  return round(operatingHours + communicationHours);
+  return {
+    operationsCredits: round(operationsCredits),
+    communicationCredits: round(communicationCredits),
+    totalCredits: round(operationsCredits + communicationCredits),
+  };
 }
 
 function applyTimedOperation(resources, roverConfiguration, {
@@ -399,8 +475,15 @@ function applyTimedOperation(resources, roverConfiguration, {
   fixedCostCredits = null,
 }, settings) {
   validateTime(resources, durationHours);
-  const expenditure = fixedCostCredits ?? calculateOperationCost(mode, durationHours, settings);
-  assertFiniteNonNegative(expenditure, "Operation expenditure");
+  const costBreakdown = fixedCostCredits === null
+    ? calculateOperationCost(mode, durationHours, settings)
+    : {
+      operationsCredits: 0,
+      communicationCredits: 0,
+      totalCredits: fixedCostCredits,
+    };
+  assertFiniteNonNegative(costBreakdown.totalCredits, "Operation expenditure");
+  const expenditure = costBreakdown.totalCredits;
   if (expenditure > resources.budget.remainingCredits) {
     throw new Error(
       `Operation costs ${expenditure} credits, but only ${resources.budget.remainingCredits} credits remain.`,
@@ -438,7 +521,11 @@ function applyTimedOperation(resources, roverConfiguration, {
   };
   const budget = {
     ...resources.budget,
-    [budgetCategory]: round(resources.budget[budgetCategory] + expenditure),
+    operationsCredits: round(resources.budget.operationsCredits + costBreakdown.operationsCredits),
+    communicationCredits: round(resources.budget.communicationCredits + costBreakdown.communicationCredits),
+    ...(fixedCostCredits === null
+      ? {}
+      : { [budgetCategory]: round(resources.budget[budgetCategory] + expenditure) }),
     remainingCredits: round(resources.budget.remainingCredits - expenditure),
   };
   const data = dataGeneratedMB > 0
@@ -477,6 +564,9 @@ function applyTimedOperation(resources, roverConfiguration, {
     energyGeneratedWh: powerResult.energyGeneratedWh,
     batteryEnergyWh: round(powerResult.batteryLevel.energyWh - resources.power.batteryEnergyWh),
     budgetCredits: -expenditure,
+    operationsCredits: -costBreakdown.operationsCredits,
+    communicationCredits: -costBreakdown.communicationCredits,
+    maintenanceCredits: budgetCategory === "maintenanceCredits" ? -expenditure : 0,
     dataStoredMB: dataGeneratedMB - (clearStoredData ? dataTransmittedMB : 0),
     dataTransmittedMB,
   });
@@ -524,6 +614,7 @@ function recordTransmissionFailure(resources, reason) {
     "transmission-failed",
     `Data transmission failed: ${reason} Stored data was retained.`,
     { transmissionFailures: 1, dataStoredMB: 0 },
+    "failure",
   );
 }
 
@@ -639,6 +730,8 @@ export function getResourceSummary(resources) {
     power: {
       nominalGenerationW: resources.power.nominalGenerationW,
       availablePowerW: resources.power.availablePowerW,
+      currentLoadW: resources.power.lastLoadW,
+      powerMarginW: round(resources.power.availablePowerW - resources.power.lastLoadW),
       batteryEnergyWh: battery.energyWh,
       batteryCapacityWh: battery.capacityWh,
       batteryPercentage: battery.percentage,
@@ -651,11 +744,15 @@ export function getResourceSummary(resources) {
         resources.budget.constructionCredits
         + resources.budget.launchCredits
         + resources.budget.operationsCredits
+        + resources.budget.communicationCredits
         + resources.budget.maintenanceCredits,
       status: resources.status.budget,
     },
     data: {
       ...resources.data,
+      remainingStorageMB: round(
+        resources.data.storageCapacityMB - resources.data.storedMB,
+      ),
       storageUtilizationPercentage: resources.data.storageCapacityMB > 0
         ? round(resources.data.storedMB / resources.data.storageCapacityMB * 100, 1)
         : 0,

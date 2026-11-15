@@ -49,6 +49,8 @@ test("available solar generation follows daylight, dust, and efficiency conditio
   const dusty = calculateAvailablePower(rover, "dusty-day");
   const night = calculateAvailablePower(rover, "night");
 
+  assert.equal(clear.availablePowerW, Math.round(165 * 0.78 * (1 - 0.05) * 0.88 * 100) / 100);
+  assert.equal(dusty.availablePowerW, Math.round(165 * 0.32 * (1 - 0.48) * 0.72 * 100) / 100);
   assert.ok(clear.availablePowerW > dusty.availablePowerW);
   assert.equal(night.availablePowerW, 0);
   assert.equal(night.nominalGenerationW, 165);
@@ -100,6 +102,29 @@ test("battery charging is capped at capacity and battery level handles zero capa
   assert.equal(calculateBatteryLevel({ batteryEnergyWh: 0, batteryCapacityWh: 0 }).status, "critical");
 });
 
+test("power validation rejects inconsistent battery state and reserve settings", () => {
+  const initial = start();
+  assert.throws(
+    () => simulatePowerInterval(
+      { ...initial.power, batteryEnergyWh: initial.power.batteryCapacityWh + 1 },
+      100,
+      10,
+      1,
+    ),
+    /Battery energy must be between zero and the configured capacity/,
+  );
+  assert.throws(
+    () => simulatePowerInterval(
+      initial.power,
+      100,
+      10,
+      1,
+      { ...MISSION_RESOURCE_CONFIG, minimumBatteryFraction: 1.1 },
+    ),
+    /Minimum battery reserve must be a fraction/,
+  );
+});
+
 test("mission setup reuses rover cost and mass calculations", () => {
   const rover = validRover();
   const resources = start();
@@ -123,6 +148,10 @@ test("initial budget records construction and launch expenses and rejects unaffo
   assert.equal(resources.budget.remainingCredits, 0);
   assert.equal(resources.events[0].type, "construction-expenditure");
   assert.equal(resources.events[1].type, "launch-expenditure");
+  assert.equal(resources.events[0].status, "success");
+  assert.equal(resources.events[0].timestamp, MISSION_RESOURCE_CONFIG.missionStartTime);
+  assert.equal(resources.events[0].eventId, "resource-event-0001");
+  assert.equal(resources.events[1].eventId, "resource-event-0002");
   assert.throws(
     () => collectScientificData(resources, rover, "spectrometer"),
     /credits remain/,
@@ -136,10 +165,13 @@ test("instrument operations generate MB from the existing catalog data units", (
 
   assert.equal(next.data.generatedMB, 12);
   assert.equal(next.data.storedMB, 12);
+  assert.equal(getResourceSummary(next).data.remainingStorageMB, 500);
   assert.equal(next.time.instrumentOperationHours, 1);
   assert.equal(next.time.elapsedHours, 1);
   assert.equal(next.events.at(-1).type, "scientific-data-collected");
   assert.equal(next.events.at(-2).type, "instrument-activated");
+  assert.equal(next.events.at(-1).status, "success");
+  assert.equal(next.events.at(-1).timestamp, "2040-01-01T01:00:00.000Z");
   assert.equal(next.events.at(-1).resourceChanges.dataStoredMB, 12);
 });
 
@@ -181,10 +213,22 @@ test("transmission spends time and power, moves stored data, and supports repeat
   assert.equal(sent.data.storedMB, 0);
   assert.equal(sent.data.transmittedMB, beforeTransmission);
   assert.equal(sent.data.generatedMB, beforeTransmission);
+  assert.equal(getResourceSummary(sent).data.remainingStorageMB, sent.data.storageCapacityMB);
   assert.ok(sent.time.communicationHours > 0);
   assert.equal(sent.events.at(-1).type, "data-transmitted");
   assert.equal(sent.events.at(-1).resourceChanges.dataTransmittedMB, beforeTransmission);
   assert.ok(sent.budget.operationsCredits > 0);
+  assert.ok(sent.budget.communicationCredits > 0);
+  assert.equal(
+    sent.budget.remainingCredits,
+    sent.budget.initialBudgetCredits
+      - sent.budget.constructionCredits
+      - sent.budget.launchCredits
+      - sent.budget.operationsCredits
+      - sent.budget.communicationCredits
+      - sent.budget.maintenanceCredits,
+  );
+  assert.equal(sent.events.at(-1).status, "success");
   assert.equal(sent.events.map(({ eventId }) => eventId).length, new Set(sent.events.map(({ eventId }) => eventId)).size);
 });
 
@@ -194,6 +238,7 @@ test("failed transmissions increment failure history and retain stored data", ()
   const noData = transmitMissionData(resources, rover);
   assert.equal(noData.data.transmissionFailures, 1);
   assert.equal(noData.events.at(-1).type, "transmission-failed");
+  assert.equal(noData.events.at(-1).status, "failure");
   assert.equal(noData.data.storedMB, 0);
 
   const collected = collectScientificData(resources, rover, "spectrometer");

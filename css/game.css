@@ -4074,11 +4074,41 @@
 }
 
 #resource-event-history .event-entry {
+  display: block;
   margin: 0 16px;
 }
 
 #resource-event-history .event-entry + .event-entry {
   border-top: 1px solid var(--line);
+}
+
+.resource-event__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.resource-event__status {
+  color: var(--signal-green);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0.06em;
+}
+
+.resource-event__status--failure {
+  color: #ff9a85;
+}
+
+.resource-event__changes,
+.resource-event__timestamp {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-500);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 1100px) {

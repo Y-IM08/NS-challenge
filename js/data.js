@@ -260,6 +260,7 @@ export const POWER_ENVIRONMENTS = Object.freeze([
 
 export const MISSION_RESOURCE_CONFIG = Object.freeze({
   hoursPerSol: 24,
+  solDefinitionLabel: "24 h/sol gameplay simplification (a Martian sol is about 24 h 39 min)",
   missionStartTime: "2040-01-01T00:00:00.000Z",
   initialBudgetCredits: 15000,
   launchCostCredits: 1800,

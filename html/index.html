@@ -456,6 +456,7 @@
                 <div class="resource-card__heading"><h2>Power</h2><span class="resource-status" id="resource-power-status">NORMAL</span></div>
                 <p class="resource-card__value"><strong id="resource-power-generation">—</strong><span>available generation</span></p>
                 <p class="resource-card__value"><strong id="resource-power-demand">—</strong><span>last operation demand</span></p>
+                <p class="resource-card__value"><strong id="resource-power-margin">—</strong><span>generation minus current load</span></p>
                 <p class="resource-card__value"><strong id="resource-battery-energy">—</strong><span>battery energy</span></p>
                 <progress id="resource-battery-progress" max="100" value="0" aria-label="Battery charge percentage"></progress>
                 <small id="resource-power-breakdown">Standby — W · Instrument — W · Rover — W · Communications — W</small>
@@ -466,7 +467,7 @@
                 <p class="resource-card__value"><strong id="resource-budget-total">—</strong><span>initial budget</span></p>
                 <p class="resource-card__value"><strong id="resource-budget-spent">—</strong><span>spent to date</span></p>
                 <p class="resource-card__value"><strong id="resource-budget-remaining">—</strong><span>remaining</span></p>
-                <small id="resource-budget-breakdown">Construction — · Launch — · Operations — · Maintenance —</small>
+                <small id="resource-budget-breakdown">Construction — · Launch — · Operations — · Communications — · Maintenance —</small>
               </article>
               <article class="panel resource-card" data-resource-card="data">
                 <div class="resource-card__heading"><h2>Data</h2><span class="resource-status" id="resource-data-status">NORMAL</span></div>
@@ -474,6 +475,7 @@
                 <p class="resource-card__value"><strong id="resource-data-stored">—</strong><span>stored</span></p>
                 <p class="resource-card__value"><strong id="resource-data-transmitted">—</strong><span>transmitted</span></p>
                 <progress id="resource-storage-progress" max="100" value="0" aria-label="Data storage utilization"></progress>
+                <small id="resource-data-remaining">— MB remaining</small>
                 <small id="resource-data-caption">—</small>
               </article>
               <article class="panel resource-card" data-resource-card="time">

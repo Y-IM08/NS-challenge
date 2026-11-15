@@ -453,7 +453,7 @@ function renderControl(state) {
   const statusLabel = (status) => status.toUpperCase();
   document.querySelector("#mission-clock-value").textContent = resources.missionClock;
   document.querySelector("#mission-time-remaining").textContent =
-    `${formatHours(resources.time.remainingHours)} remaining · ${resources.time.missionDurationHours / resources.time.hoursPerSol} sols total`;
+    `${formatHours(resources.time.remainingHours)} remaining · ${resources.time.missionDurationHours / resources.time.hoursPerSol} sols total · ${MISSION_RESOURCE_CONFIG.solDefinitionLabel}`;
   document.querySelector("#control-power-value").textContent =
     `${resources.power.availablePowerW.toFixed(1)} W`;
   document.querySelector("#control-power-detail").textContent =
@@ -479,7 +479,9 @@ function renderControl(state) {
   document.querySelector("#resource-power-generation").textContent =
     `${resources.power.availablePowerW.toFixed(1)} W`;
   document.querySelector("#resource-power-demand").textContent =
-    `${state.resources.power.lastLoadW.toFixed(1)} W`;
+    `${resources.power.currentLoadW.toFixed(1)} W`;
+  document.querySelector("#resource-power-margin").textContent =
+    `${resources.power.powerMarginW >= 0 ? "+" : ""}${resources.power.powerMarginW.toFixed(1)} W`;
   document.querySelector("#resource-battery-energy").textContent =
     `${resources.power.batteryEnergyWh.toFixed(1)} / ${resources.power.batteryCapacityWh.toFixed(1)} Wh`;
   document.querySelector("#resource-battery-progress").value = resources.power.batteryPercentage;
@@ -495,7 +497,7 @@ function renderControl(state) {
   document.querySelector("#resource-budget-remaining").textContent =
     formatCredits(resources.budget.remainingCredits);
   document.querySelector("#resource-budget-breakdown").textContent =
-    `Construction ${formatCredits(resources.budget.constructionCredits)} · Launch ${formatCredits(resources.budget.launchCredits)} · Operations ${formatCredits(resources.budget.operationsCredits)} · Maintenance ${formatCredits(resources.budget.maintenanceCredits)}`;
+    `Construction ${formatCredits(resources.budget.constructionCredits)} · Launch ${formatCredits(resources.budget.launchCredits)} · Operations ${formatCredits(resources.budget.operationsCredits)} · Communications ${formatCredits(resources.budget.communicationCredits)} · Maintenance ${formatCredits(resources.budget.maintenanceCredits)}`;
   document.querySelector("#resource-data-generated").textContent =
     `${resources.data.generatedMB.toFixed(1)} MB`;
   document.querySelector("#resource-data-stored").textContent =
@@ -504,6 +506,8 @@ function renderControl(state) {
     `${resources.data.transmittedMB.toFixed(1)} MB`;
   document.querySelector("#resource-storage-progress").value =
     resources.data.storageUtilizationPercentage;
+  document.querySelector("#resource-data-remaining").textContent =
+    `${resources.data.remainingStorageMB.toFixed(1)} MB remaining`;
   document.querySelector("#resource-data-caption").textContent =
     `${resources.data.storageUtilizationPercentage.toFixed(1)}% of ${resources.data.storageCapacityMB.toFixed(1)} MB storage · ${resources.data.transmissionFailures} failed transmissions`;
   document.querySelector("#resource-time-elapsed").textContent =
@@ -555,8 +559,24 @@ function renderControl(state) {
   document.querySelector("#resource-event-history").replaceChildren(
     ...[...state.resources.events].reverse().slice(0, 10).map((event) => {
       const entry = makeElement("article", "event-entry");
-      entry.append(makeElement("span", "event-entry__time", event.simulationTime));
+      entry.dataset.status = event.status;
+      const meta = makeElement("div", "resource-event__meta");
+      meta.append(
+        makeElement("span", "event-entry__time", event.simulationTime),
+        makeElement("span", `resource-event__status resource-event__status--${event.status}`, event.status.toUpperCase()),
+      );
+      entry.append(meta);
       entry.append(makeElement("p", "", event.description));
+      const changes = Object.entries(event.resourceChanges)
+        .filter(([, value]) => Number.isFinite(value) && value !== 0)
+        .map(([key, value]) => `${key.replaceAll(/([A-Z])/g, " $1")}: ${value > 0 ? "+" : ""}${value}`)
+        .join(" · ");
+      if (changes) {
+        entry.append(makeElement("small", "resource-event__changes", changes));
+      }
+      const timestamp = makeElement("time", "resource-event__timestamp", event.timestamp);
+      timestamp.dateTime = event.timestamp;
+      entry.append(timestamp);
       return entry;
     }),
   );
