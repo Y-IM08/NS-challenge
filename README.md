@@ -17,7 +17,7 @@ Open [http://localhost:8000/html/](http://localhost:8000/html/) in a modern brow
 - **Main menu:** Start Mission, Mission Archive, How to Play, Settings, and Credits.
 - **Mission briefing:** Existing mission profiles, scientific objectives, settlement rationale, constraints, and Continue.
 - **Player role selection:** Four role profiles and four assignable slots in the same browser session.
-- **Mission planning:** Mission overview, conceptual landing-site selection, objectives, resources/status notes, duration, and checklist.
+- **Mission planning:** Editable mission name/profile/duration, conceptual landing-site selection, four selectable and ranked science objectives, resource estimates, operational strategy guidance, deterministic risks, mandatory validation, recommendations, and readiness status.
 - **Rover design studio:** CSS/SVG rover schematic and interactive chassis, mobility, power, instrument, communication, and landing-system configuration.
 - **Mission control:** Resource dashboard, configurable power environment, instrument operations, data transmission, idle time, maintenance expenses, event history, and surface-map/objective previews.
 - **Field scenario:** Reusable challenge presentation, selectable discussion prompt, severity, and consequence-preview panel.
@@ -25,7 +25,7 @@ Open [http://localhost:8000/html/](http://localhost:8000/html/) in a modern brow
 - **Mission results:** Outcome, objectives, resources, engineering, and evaluation summary placeholders.
 - Supporting archive, how-to, settings, and credits screens.
 
-Selection controls update local in-memory state. Rover mass, cost, power, payload, reliability index, terrain-fit indicator, science coverage, and engineering validation update immediately from the selected component catalog. Mission control applies deterministic power, budget, data, time, and mass accounting to instrument operations, transmissions, idle intervals, and maintenance. Challenge responses remain discussion prompts; rover movement, scientific outcomes, map marks, and scoring remain presentation previews.
+Selection controls update local in-memory state. Mission plan and validation snapshots refresh whenever relevant mission inputs, landing site, or rover components change. Rover mass, cost, power, payload, reliability index, terrain-fit indicator, science coverage, and engineering validation update immediately from the selected component catalog. Mission control applies deterministic power, budget, data, time, and mass accounting to instrument operations, transmissions, idle intervals, and maintenance. Challenge responses remain discussion prompts; rover movement, scientific outcomes, map marks, and scoring remain presentation previews.
 
 ## Rover engineering model
 
@@ -46,6 +46,18 @@ Current configurable mission limits are 300 kg rover mass, 6,000 credits, 65 kg 
 Scientific coverage maps instruments to mineral composition, regolith properties, agricultural assessment, and atmospheric conditions/wind speed. Agricultural assessment requires instrument indicators for regolith chemistry, nutrient-related factors, potential water, and environmental conditions. Instrument coverage does **not** establish that Martian soil is suitable for agriculture; further analysis is required.
 
 All component, cost, power, reliability, data, and terrain-fit numbers are illustrative gameplay values, not verified NASA engineering specifications. The model does not simulate changing real solar/weather conditions, actual battery chemistry, rover dynamics, communications windows, or autonomous operation scheduling.
+
+## Mission planning and validation
+
+`js/planning.js` is the pure mission planning and validation layer. It consumes the existing mission, site, objective, rover-component, engineering-limit, and resource catalogs; it does not duplicate rover mass/cost/power functions or the resource engine's power and expense formulas.
+
+- **Configuration:** Central state stores mission name and profile, landing-site ID, integer duration in configured 1–30 gameplay sols, selected objectives with priority ranks, and an operational strategy. Profiles come from `MISSION_CATALOG`; selecting another profile in the planning screen updates the active mission. Landing sites reuse `LANDING_SITES`, with explicitly illustrative environment, science-context, communication, and operational-risk annotations.
+- **Science plan:** Every objective links to `SCIENCE_CAPABILITY_REQUIREMENTS`. Instrument coverage is validated against the installed rover using `getScientificCapabilities()`; selected objectives remain planned, not completed. Agricultural viability still requires multiple evidence types and the model does not claim Mars soil is agriculture-ready.
+- **Resource estimates:** Construction cost, component mass, payload, and power use `calculateRoverMetrics()` / `calculateRoverCost()`. Site-adjusted nominal power and planned operation loads use `resources.js`; the battery estimate uses its deterministic interval simulator. Data generation uses the installed catalog instruments' existing data-unit values. Communication time uses selected link capacity; budget categories use the resource module's expense-estimate helper. The plan estimates one illustrative 1-hour operation for each distinct instrument needed to cover selected objectives, one transmission of the estimated data, the configured maintenance allowance, and a 10% mission-time emergency reserve. These are planning estimates, not an execution schedule.
+- **Strategies:** Science First, Power Conservative, Data Efficient, and Balanced are guidance-only. Their trade-offs are explained in the UI; they do not adjust equipment, cost, data, power, or guarantee success.
+- **Risks:** The deterministic report evaluates power and battery reserve, mass, budget, data storage, link capacity, mission duration, selected-objective instrument coverage, conceptual site fit, and maintenance/contingency allowance. Each risk has a low/medium/high severity, reason, mitigation, and blocking flag. Site suitability is an illustrative compatibility indicator, never a landing-safety assessment. High risks block only when tied to a mandatory constraint; advisory risks remain visible.
+- **Validation and readiness:** The report records passed and failed mandatory checks, warnings, risk summary, recommendations, an explicit deterministic evaluation marker, and a source signature. `READY` requires all mandatory checks and no blocking high-severity risks; nonblocking advisory risks yield `NEEDS ATTENTION`; failed requirements yield `NOT READY`. Planning setup checks allow progression to Rover Design so the player can build missing hardware; Mission Control remains guarded by fresh full-plan and rover validation.
+- **State freshness:** `state.js` owns the plan configuration and rebuilt estimates/risks/report. State publication regenerates the report from the current rover, mission profile, and site, so rover reset or changes cannot leave a stale ready result. Mission planning locks when Mission Control resource operations have started.
 
 ## Mission resource model
 
@@ -69,7 +81,7 @@ Run the automated calculation and state tests from the project root:
 node --experimental-default-type=module --test tests/*.test.js
 ```
 
-Current verification: **38 automated tests passed, 0 failed**. The suite covers resource power/environment behavior, battery capacity/reserve and atomic failure, category-specific costs and budget limits, data storage/transmission/failures, elapsed-time and emergency-delay bounds, maintenance, mass reuse, timestamped event history, state immutability, and the existing rover calculations/navigation. Static selector checks found 104 queried IDs with no missing or duplicate matches across 153 HTML IDs. Browser interaction testing was not run.
+Current verification: **64 Node.js built-in tests passed, 0 failed** using the command above. Coverage includes rover engineering, resource accounting, planning estimates and validations, risk/readiness states, immutable plan updates, freshness after rover/site changes, and navigation guards. Static UI checks found **171 unique HTML IDs and 114 queried IDs**, with no missing selector targets. Browser smoke tests confirmed startup and the menu-to-rover workflow, planning profile/site/objective/priority/strategy/duration changes, and the Mission Control guard for an incomplete rover. Escape navigation and visible keyboard focus worked; tested responsive widths had no horizontal overflow, and no console/page errors occurred. All values and formulas are illustrative gameplay inputs; this is not NASA mission-planning software.
 
 ## Navigation
 
@@ -92,10 +104,11 @@ In-screen Back buttons and `Escape` return to the preceding screen. The persiste
 - `js/data.js` — mission and component catalogs, science capability mapping, engineering limits, challenge content, and initial state.
 - `js/state.js` — centralized immutable state, guarded transitions, rover component selection/reset, local selections, and subscriptions.
 - `js/rover.js` — pure rover metrics, science coverage, environmental-fit indicator, and engineering validation.
+- `js/planning.js` — pure plan estimates, objective coverage validation, deterministic risk assessment, readiness report, and configuration signature.
 - `js/resources.js` — pure power, budget, data, time, and mass resource calculations plus deterministic operation/event recording.
 - `js/ui.js` — reusable DOM renderers, delegated events, and screen navigation.
-- `tests/rover.test.js`, `tests/resources.test.js`, and `tests/state-rover.test.js` — Node.js built-in tests for rover calculations, resource accounting, immutable state actions, and navigation guards.
-- `PROJECT_CONTEXT.md` — architecture, decisions, current scope, and next phase.
+- `tests/rover.test.js`, `tests/resources.test.js`, `tests/state-rover.test.js`, `tests/planning.test.js`, and `tests/planning-state.test.js` — Node.js built-in tests for engineering, resource, planning, immutable state, risk, readiness, and navigation guards.
+- `PROJECT_CONTEXT.md` — architecture, decisions, current scope, and Phase 5 boundary.
 
 The historical `mission.js`, `scientist.js`, and `evalauation.js` files remain unused. `rover.js` is active. The evaluation filename appears misspelled; resolve the name before adding an evaluation module.
 
@@ -107,4 +120,4 @@ The historical `mission.js`, `scientist.js`, and `evalauation.js` files remain u
 - Role slots and setup choices are local to the current page session; they are not online multiplayer or saved profiles.
 - The challenge and results screens are presentation previews; mission control simulates resource accounting but not surface movement, science outcomes, or mission scoring.
 
-Next, implement mission/resource simulation, authored challenge outcomes, scientist dialogue progression, and transparent end-of-mission evaluation. Preserve the separation between data, state transitions, pure domain calculations, and rendering; add automated tests before connecting additional behavior to the UI.
+Next, a separate Phase 6 can connect validated planning and existing resource accounting to authored mission operations, challenge outcomes, scientist dialogue progression, and transparent end-of-mission evaluation. Those behaviors are not included in this planning phase. Preserve the separation between data, state transitions, pure domain calculations, and rendering; add automated tests before connecting additional behavior to the UI.

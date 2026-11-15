@@ -449,6 +449,15 @@ function validateTime(resources, durationHours) {
 }
 
 function calculateOperationCost(mode, durationHours, settings) {
+  return calculateTimedOperationExpense(mode, durationHours, settings);
+}
+
+export function calculateTimedOperationExpense(
+  mode,
+  durationHours,
+  settings = MISSION_RESOURCE_CONFIG,
+) {
+  assertFiniteNonNegative(durationHours, "Operation duration");
   const operationsCredits = mode === "maintenance"
     ? 0
     : durationHours * settings.operationCostCreditsPerHour;
@@ -459,6 +468,35 @@ function calculateOperationCost(mode, durationHours, settings) {
     operationsCredits: round(operationsCredits),
     communicationCredits: round(communicationCredits),
     totalCredits: round(operationsCredits + communicationCredits),
+  };
+}
+
+export function estimateMissionOperationExpenses(
+  instrumentOperationHours,
+  communicationHours,
+  settings = MISSION_RESOURCE_CONFIG,
+) {
+  assertFiniteNonNegative(instrumentOperationHours, "Instrument operation time");
+  assertFiniteNonNegative(communicationHours, "Communication time");
+  const instrument = calculateTimedOperationExpense(
+    "instrument",
+    instrumentOperationHours,
+    settings,
+  );
+  const communication = calculateTimedOperationExpense(
+    "transmit",
+    communicationHours,
+    settings,
+  );
+  return {
+    operationsCredits: round(instrument.operationsCredits + communication.operationsCredits),
+    communicationCredits: communication.communicationCredits,
+    maintenanceCredits: settings.maintenanceCostCredits,
+    totalCredits: round(
+      instrument.totalCredits
+      + communication.totalCredits
+      + settings.maintenanceCostCredits,
+    ),
   };
 }
 

@@ -4,11 +4,18 @@ import {
   LANDING_SITES,
   MISSION_CATALOG,
   MISSION_RESOURCE_CONFIG,
+  MISSION_STRATEGIES,
   PLAYER_ROLES,
   PLAYER_SLOTS,
   ROVER_CATEGORIES,
+  SCIENCE_OBJECTIVES,
 } from "./data.js";
 import { validateRoverConfiguration } from "./rover.js";
+import {
+  buildMissionPlan,
+  createMissionPlanConfiguration,
+  validatePlanningInputs,
+} from "./planning.js";
 import {
   advanceMissionTime as advanceResourcesTime,
   collectScientificData,
@@ -63,6 +70,17 @@ function freezeDeep(value) {
 }
 
 function publish(nextState) {
+  if (nextState.missionPlan?.configuration && nextState.currentMissionId) {
+    const configuration = {
+      ...nextState.missionPlan.configuration,
+      missionProfileId: nextState.currentMissionId,
+      landingSiteId: nextState.selectedLandingSiteId,
+    };
+    nextState = {
+      ...nextState,
+      missionPlan: buildMissionPlan(configuration, nextState.rover),
+    };
+  }
   state = freezeDeep(nextState);
   listeners.forEach((listener) => listener(state));
   return state;
@@ -120,27 +138,47 @@ export function navigateTo(screen) {
   if (screen === "rover" && !state.currentMissionId) {
     throw new Error("Accept a mission briefing before opening rover design.");
   }
+  if (screen === "rover") {
+    const planningInputs = validatePlanningInputs(state.missionPlan?.configuration);
+    if (!planningInputs.isValid) {
+      throw new Error(
+        `Mission planning is incomplete: ${planningInputs.errors.map(({ message }) => message).join(" ")}`,
+      );
+    }
+  }
   if (screen === "control" && !state.currentMissionId) {
     throw new Error("Accept a mission briefing before opening mission control.");
   }
   if (screen === "control") {
     const validation = validateRoverConfiguration(state.rover, undefined, {
       selectedLandingSiteId: state.selectedLandingSiteId,
+      objectiveIds: state.missionPlan?.configuration.objectivePriorities
+        .map(({ objectiveId }) => objectiveId) ?? [],
     });
     if (!validation.isValid) {
       throw new Error(`Rover configuration is invalid: ${validation.errors.map(({ message }) => message).join(" ")}`);
     }
   }
+  const missionPlan = screen === "control" && state.missionPlan?.configuration
+    ? buildMissionPlan(state.missionPlan.configuration, state.rover)
+    : state.missionPlan;
+  if (screen === "control" && !missionPlan?.validation.isReady) {
+    const failures = missionPlan?.validation.failedChecks
+      .map(({ message }) => message)
+      .join(" ") || "Complete and validate the mission plan first.";
+    throw new Error(`Mission plan is not ready: ${failures}`);
+  }
   const nextState = screen === "control" && state.resources === null
     ? {
       ...state,
+      missionPlan,
       resources: createMissionResources({
         roverConfiguration: state.rover,
         missionId: state.currentMissionId,
-        missionDurationSols: Number.parseFloat(getMission(state.currentMissionId).duration),
+        missionDurationSols: missionPlan.configuration.durationSols,
       }),
     }
-    : state;
+    : screen === "control" ? { ...state, missionPlan } : state;
   return navigate(screen, nextState);
 }
 
@@ -170,6 +208,7 @@ export function selectMission(missionId) {
     ...state,
     selectedMissionId: missionId,
     currentMissionId: null,
+    missionPlan: null,
     resources: null,
     screen: "briefing",
     screenHistory: [...state.screenHistory, state.screen],
@@ -184,6 +223,12 @@ export function acceptMission() {
   return publish({
     ...state,
     currentMissionId: state.selectedMissionId,
+    missionPlan: {
+      configuration: createMissionPlanConfiguration(
+        state.selectedMissionId,
+        state.selectedLandingSiteId,
+      ),
+    },
     resources: null,
     screen: "roles",
     screenHistory: [...state.screenHistory, state.screen],
@@ -215,7 +260,143 @@ export function selectLandingSite(siteId) {
   if (!LANDING_SITES.some(({ id }) => id === siteId)) {
     throw new RangeError(`Unknown landing site: ${siteId}`);
   }
+  if (state.resources) {
+    throw new Error("Landing-site planning is locked after mission operations begin.");
+  }
+  if (state.selectedLandingSiteId === siteId) {
+    return state;
+  }
   return publish({ ...state, selectedLandingSiteId: siteId });
+}
+
+function requireEditableMissionPlan() {
+  if (!state.missionPlan?.configuration || !["planning", "rover"].includes(state.screen)) {
+    throw new Error("Mission planning can only be edited from the planning or rover-design screen.");
+  }
+  if (state.resources) {
+    throw new Error("Mission planning is locked after mission operations begin.");
+  }
+}
+
+export function selectPlanningMissionProfile(missionId) {
+  requireEditableMissionPlan();
+  const mission = getMission(missionId);
+  const previousMission = getMission(state.currentMissionId);
+  const configuration = state.missionPlan.configuration;
+  const previousDefaultDuration = Number.parseFloat(previousMission.duration);
+  const durationSols = configuration.durationSols === previousDefaultDuration
+    ? Number.parseFloat(mission.duration)
+    : configuration.durationSols;
+  const defaultName = `${previousMission.title} Mission`;
+  const missionName = configuration.missionName === defaultName
+    ? `${mission.title} Mission`
+    : configuration.missionName;
+  return publish({
+    ...state,
+    selectedMissionId: missionId,
+    currentMissionId: missionId,
+    missionPlan: {
+      configuration: {
+        ...configuration,
+        missionName,
+        missionProfileId: missionId,
+        durationSols,
+      },
+    },
+  });
+}
+
+export function updateMissionPlanField(field, value) {
+  requireEditableMissionPlan();
+  if (field !== "missionName" && field !== "durationSols") {
+    throw new RangeError(`Unknown mission planning field: ${field}`);
+  }
+  const nextValue = field === "missionName"
+    ? value
+    : Number(value);
+  if (field === "missionName" && typeof nextValue !== "string") {
+    throw new TypeError("Mission name must be text.");
+  }
+  return publish({
+    ...state,
+    missionPlan: {
+      configuration: {
+        ...state.missionPlan.configuration,
+        [field]: nextValue,
+      },
+    },
+  });
+}
+
+export function toggleMissionObjective(objectiveId) {
+  requireEditableMissionPlan();
+  if (!SCIENCE_OBJECTIVES.some(({ id }) => id === objectiveId)) {
+    throw new RangeError(`Unknown scientific objective: ${objectiveId}`);
+  }
+  const objectives = state.missionPlan.configuration.objectivePriorities;
+  const existing = objectives.find(({ objectiveId: id }) => id === objectiveId);
+  const objectivePriorities = existing
+    ? objectives.filter(({ objectiveId: id }) => id !== objectiveId)
+    : [...objectives, {
+      objectiveId,
+      priority: Math.min(
+        SCIENCE_OBJECTIVES.length,
+        Math.max(0, ...objectives.map(({ priority }) => priority)) + 1,
+      ),
+    }];
+  return publish({
+    ...state,
+    missionPlan: {
+      configuration: {
+        ...state.missionPlan.configuration,
+        objectivePriorities,
+      },
+    },
+  });
+}
+
+export function setMissionObjectivePriority(objectiveId, priority) {
+  requireEditableMissionPlan();
+  if (!SCIENCE_OBJECTIVES.some(({ id }) => id === objectiveId)) {
+    throw new RangeError(`Unknown scientific objective: ${objectiveId}`);
+  }
+  if (!Number.isInteger(priority) || priority < 1 || priority > SCIENCE_OBJECTIVES.length) {
+    throw new RangeError(`Objective priority must be between 1 and ${SCIENCE_OBJECTIVES.length}.`);
+  }
+  const objectivePriorities = state.missionPlan.configuration.objectivePriorities.map((item) =>
+    item.objectiveId === objectiveId ? { ...item, priority } : item,
+  );
+  if (objectivePriorities.length === state.missionPlan.configuration.objectivePriorities.length) {
+    return publish({
+      ...state,
+      missionPlan: {
+        configuration: {
+          ...state.missionPlan.configuration,
+          objectivePriorities,
+        },
+      },
+    });
+  }
+  throw new Error("Select the scientific objective before assigning its priority.");
+}
+
+export function selectMissionStrategy(strategyId) {
+  requireEditableMissionPlan();
+  if (!MISSION_STRATEGIES.some(({ id }) => id === strategyId)) {
+    throw new RangeError(`Unknown mission strategy: ${strategyId}`);
+  }
+  if (state.missionPlan.configuration.strategyId === strategyId) {
+    return state;
+  }
+  return publish({
+    ...state,
+    missionPlan: {
+      configuration: {
+        ...state.missionPlan.configuration,
+        strategyId,
+      },
+    },
+  });
 }
 
 export function selectChallengeDecision(decisionId) {

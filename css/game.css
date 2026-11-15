@@ -1197,6 +1197,499 @@
   }
 }
 
+.planning-input-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(130px, 0.55fr);
+  gap: 12px;
+  padding: 14px 16px 8px;
+}
+
+.planning-field {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  color: var(--ink-500);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+}
+
+.planning-field small {
+  color: var(--ink-500);
+  font-size: 8px;
+  letter-spacing: 0;
+}
+
+.planning-field input,
+.planning-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: #0a111b;
+  color: var(--ink-100);
+  font: 10px "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+.planning-profile-summary {
+  margin: 0;
+  padding: 0 16px 14px;
+  color: var(--ink-400);
+  font-size: 9px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.site-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.site-card {
+  min-width: 0;
+  grid-template-columns: 1fr;
+  align-content: start;
+}
+
+.site-card__terrain {
+  text-align: left;
+}
+
+.site-card__science,
+.site-card__conditions,
+.site-card__risk,
+.site-card__communications {
+  color: var(--ink-500);
+  font-size: 8px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.site-card__science {
+  margin-top: 3px;
+  color: var(--ink-300);
+}
+
+.planning-objectives,
+.planning-resource-grid,
+.planning-strategies,
+.planning-risk-list,
+.planning-validation-list {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+  padding: 14px 16px;
+}
+
+.planning-objectives {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.planning-objective,
+.planning-estimate,
+.planning-strategy,
+.planning-risk,
+.planning-check {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: rgba(6, 12, 20, 0.32);
+  overflow-wrap: anywhere;
+}
+
+.planning-objective {
+  padding: 12px;
+}
+
+.planning-objective--selected,
+.planning-strategy--selected {
+  border-color: rgba(255, 154, 114, 0.55);
+  background: rgba(242, 118, 76, 0.055);
+}
+
+.planning-objective__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.planning-objective__select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ink-100);
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.planning-objective__select input {
+  flex: 0 0 auto;
+  accent-color: var(--mars-400);
+}
+
+.planning-objective__priority {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  color: var(--ink-500);
+  font-family: var(--font-mono);
+  font-size: 7px;
+}
+
+.planning-objective__priority select {
+  min-width: 52px;
+  padding: 4px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: #0a111b;
+  color: var(--ink-200);
+  font-size: 9px;
+}
+
+.planning-objective__detail,
+.planning-objective__importance {
+  margin: 9px 0 0;
+  color: var(--ink-400);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.planning-objective__importance {
+  color: var(--ink-500);
+}
+
+.planning-objective__capabilities {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.planning-objective__capabilities li {
+  display: grid;
+  gap: 2px;
+  padding-left: 7px;
+  border-left: 2px solid var(--signal-amber);
+}
+
+.planning-objective__capabilities li.is-covered {
+  border-color: var(--signal-green);
+}
+
+.planning-objective__capabilities strong {
+  color: var(--ink-300);
+  font-size: 8px;
+  font-weight: 550;
+}
+
+.planning-objective__capabilities small {
+  color: var(--ink-500);
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.planning-objective__coverage,
+.planning-strategy__tag,
+.planning-risk__meta,
+.planning-check__result {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0.06em;
+}
+
+.planning-objective__coverage {
+  color: var(--signal-amber);
+}
+
+.planning-objective__coverage--ready {
+  color: var(--signal-green);
+}
+
+.planning-objective__coverage--partial {
+  color: var(--signal-amber);
+}
+
+.planning-resource-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.planning-estimate {
+  padding: 11px;
+}
+
+.planning-estimate h3 {
+  margin: 0 0 9px;
+  color: var(--mars-300);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+}
+
+.planning-estimate__list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  margin: 0;
+}
+
+.planning-estimate__list dt {
+  color: var(--ink-500);
+  font-size: 8px;
+}
+
+.planning-estimate__list dd {
+  margin: 0 0 5px;
+  color: var(--ink-200);
+  font-size: 9px;
+  font-weight: 550;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.planning-strategies {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.planning-strategy {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  padding: 12px;
+  color: var(--ink-400);
+  cursor: pointer;
+  text-align: left;
+}
+
+.planning-strategy:hover,
+.planning-strategy:focus-visible {
+  border-color: rgba(255, 154, 114, 0.55);
+}
+
+.planning-strategy strong {
+  color: var(--ink-100);
+  font-size: 11px;
+}
+
+.planning-strategy > span:not(.planning-strategy__tag),
+.planning-strategy small {
+  color: var(--ink-400);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.planning-strategy__tag {
+  color: var(--mars-300);
+}
+
+.planning-risk-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.planning-risk {
+  padding: 11px;
+}
+
+.planning-risk[data-severity="high"] {
+  border-color: rgba(255, 120, 104, 0.48);
+}
+
+.planning-risk[data-severity="medium"] {
+  border-color: rgba(234, 184, 121, 0.42);
+}
+
+.planning-risk__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: var(--ink-500);
+}
+
+.planning-risk[data-severity="high"] .planning-risk__severity,
+.planning-risk__blocking {
+  color: #ff9a85;
+}
+
+.planning-risk[data-severity="medium"] .planning-risk__severity {
+  color: var(--signal-amber);
+}
+
+.planning-risk[data-severity="low"] .planning-risk__severity {
+  color: var(--signal-green);
+}
+
+.planning-risk h3 {
+  margin: 8px 0 5px;
+  color: var(--ink-200);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.planning-risk p,
+.planning-risk small {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--ink-500);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.planning-risk small {
+  color: var(--ink-400);
+}
+
+.planning-validation-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.planning-check {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 9px;
+  padding: 9px 10px;
+}
+
+.planning-check--pass {
+  border-left: 2px solid var(--signal-green);
+}
+
+.planning-check--fail {
+  border-left: 2px solid #ff806b;
+}
+
+.planning-check__result {
+  color: var(--signal-green);
+}
+
+.planning-check--fail .planning-check__result {
+  color: #ff9a85;
+}
+
+.planning-check__content {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.planning-check__content strong {
+  color: var(--ink-200);
+  font-size: 8px;
+  font-weight: 600;
+}
+
+.planning-check__content small {
+  color: var(--ink-500);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.planning-recommendations {
+  margin: 0 16px 14px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.planning-recommendations h3 {
+  margin: 0 0 7px;
+  color: var(--ink-300);
+  font-size: 9px;
+}
+
+.planning-recommendations ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 16px;
+  color: var(--ink-500);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.planning-readiness-panel > p,
+.mission-readiness-note {
+  margin: 0;
+  padding: 0 16px 14px;
+  color: var(--ink-400);
+  font-size: 9px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.mission-readiness-note[data-status="critical"] {
+  color: #ff9a85;
+}
+
+.mission-readiness-note[data-status="normal"] {
+  color: var(--signal-green);
+}
+
+.mission-status[data-status="warning"] {
+  color: var(--signal-amber);
+}
+
+.mission-status[data-status="critical"] {
+  color: #ff9a85;
+}
+
+@media (max-width: 1100px) {
+  .planning-resource-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .planning-strategies {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .site-grid,
+  .planning-risk-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .planning-input-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .planning-field:nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .planning-objectives,
+  .planning-resource-grid,
+  .planning-validation-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 540px) {
+  .site-grid,
+  .planning-objectives,
+  .planning-resource-grid,
+  .planning-strategies,
+  .planning-risk-list,
+  .planning-validation-list,
+  .planning-input-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .planning-field:nth-child(2) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .planning-objective__header {
+    align-items: flex-start;
+  }
+}
+
 .topbar__menu-button {
   min-height: 31px;
   padding: 0 10px;

@@ -284,14 +284,19 @@ export function validateRoverConfiguration(
     }
   }
 
-  metrics.scientificCapabilities.forEach((objective) => {
+  const requiredObjectiveIds = options.objectiveIds
+    ? new Set(options.objectiveIds)
+    : null;
+  metrics.scientificCapabilities
+    .filter((objective) => !requiredObjectiveIds || requiredObjectiveIds.has(objective.objectiveId))
+    .forEach((objective) => {
     if (objective.coverageStatus !== "ready") {
       addError(
         `science-${objective.objectiveId}`,
         `${objective.objectiveName} cannot be fully investigated; missing capabilities: ${objective.missingCapabilities.join(", ")}.`,
       );
     }
-  });
+    });
 
   if (metrics.totalMassKg >= limits.maxRoverMassKg * 0.85 && metrics.totalMassKg <= limits.maxRoverMassKg) {
     addWarning("mass-margin", `Mass is close to the ${limits.maxRoverMassKg} kg limit.`);

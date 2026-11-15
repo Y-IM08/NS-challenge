@@ -122,6 +122,12 @@ export const LANDING_SITES = Object.freeze([
     terrain: "Ancient delta · layered sediment",
     terrainTags: Object.freeze(["delta", "loose-regolith", "rocky"]),
     note: "A preserved river-delta setting for examining mineral deposits and past water activity.",
+    scientificImportance: "A conceptual setting for prioritizing mineral and regolith observations.",
+    environmentalConditions: "Illustrative mixed terrain profile; typical-day power environment used for estimates.",
+    operationalRisks: "Terrain tags indicate a mobility trade-off only; they are not a landing-safety assessment.",
+    communicationConsiderations: "A relay is required; no site-specific link window is modeled.",
+    objectiveSuitability: Object.freeze(["minerals", "regolith", "agriculture"]),
+    powerEnvironmentId: "typical-day",
   }),
   Object.freeze({
     id: "elysium",
@@ -130,6 +136,12 @@ export const LANDING_SITES = Object.freeze([
     terrain: "Broad plain · subsurface ice prospects",
     terrainTags: Object.freeze(["plain", "dust", "ice-prospects"]),
     note: "A relatively level plain selected here for a conceptual survey of accessible ice indicators.",
+    scientificImportance: "A conceptual setting for comparing subsurface and atmospheric observations.",
+    environmentalConditions: "Illustrative plain and dust tags; typical-day power environment used for estimates.",
+    operationalRisks: "Surface tags do not establish local hazards or landing safety.",
+    communicationConsiderations: "A relay is required; no site-specific link window is modeled.",
+    objectiveSuitability: Object.freeze(["regolith", "agriculture", "atmosphere"]),
+    powerEnvironmentId: "typical-day",
   }),
   Object.freeze({
     id: "arcadia",
@@ -138,6 +150,12 @@ export const LANDING_SITES = Object.freeze([
     terrain: "Northern plain · ice-rich terrain",
     terrainTags: Object.freeze(["plain", "dust", "ice-rich"]),
     note: "A northern setting for considering water access and long-duration settlement constraints.",
+    scientificImportance: "A conceptual setting for relating environmental and subsurface indicators.",
+    environmentalConditions: "Illustrative northern-plain tags; dusty-day power environment used for estimates.",
+    operationalRisks: "Environmental tags are planning prompts, not forecasts or safety data.",
+    communicationConsiderations: "A relay is required; no site-specific link window is modeled.",
+    objectiveSuitability: Object.freeze(["minerals", "agriculture", "atmosphere"]),
+    powerEnvironmentId: "dusty-day",
   }),
 ]);
 
@@ -251,6 +269,47 @@ export const ENGINEERING_LIMITS = Object.freeze({
   lowPowerMarginRatio: 0.15,
 });
 
+export const MISSION_STRATEGIES = Object.freeze([
+  Object.freeze({
+    id: "science-first",
+    name: "Science First",
+    description: "Prioritize broad scientific coverage and the observations most relevant to settlement questions.",
+    tradeoff: "More instruments can increase power demand, data volume, mass, and cost.",
+    effect: "Guidance only; this strategy does not change calculations or guarantee scientific outcomes.",
+  }),
+  Object.freeze({
+    id: "power-conservative",
+    name: "Power Conservative",
+    description: "Favor operating plans with a larger estimated battery reserve and manageable peak load.",
+    tradeoff: "Fewer or shorter operations can limit the volume of collected observations.",
+    effect: "Guidance only; this strategy does not change power generation or battery values.",
+  }),
+  Object.freeze({
+    id: "data-efficient",
+    name: "Data Efficient",
+    description: "Consider link capacity and storage limits when choosing the instruments and order of planned observations.",
+    tradeoff: "A narrower observation set may leave some objectives less completely supported.",
+    effect: "Guidance only; this strategy does not compress data or change communication capacity.",
+  }),
+  Object.freeze({
+    id: "balanced",
+    name: "Balanced",
+    description: "Balance science coverage, power reserve, data return, available time, and budget.",
+    tradeoff: "No single resource or objective receives automatic priority.",
+    effect: "Guidance only; this strategy does not modify any resource value.",
+  }),
+]);
+
+export const MISSION_PLANNING_LIMITS = Object.freeze({
+  minimumDurationSols: 1,
+  maximumDurationSols: 30,
+  instrumentOperationHours: 1,
+  emergencyReserveFraction: 0.1,
+  lowBudgetReserveFraction: 0.15,
+  lowBatteryReserveFraction: 0.25,
+  nearCapacityFraction: 0.85,
+});
+
 export const POWER_ENVIRONMENTS = Object.freeze([
   Object.freeze({ id: "clear-day", label: "Clear daylight", daylightFraction: 0.78, dustAccumulation: 0.05, solarEfficiency: 0.88 }),
   Object.freeze({ id: "typical-day", label: "Typical daylight", daylightFraction: 0.58, dustAccumulation: 0.18, solarEfficiency: 0.82 }),
@@ -303,7 +362,7 @@ export const SCIENCE_OBJECTIVES = Object.freeze([
 
 export const MISSION_CONSTRAINTS = Object.freeze([
   Object.freeze({ label: "Mission duration", value: "Defined by selected mission profile" }),
-  Object.freeze({ label: "Power, mass & budget", value: "Checked against configurable limits in rover design" }),
+  Object.freeze({ label: "Power, mass & budget", value: "Estimated during planning and checked against configurable engineering limits" }),
   Object.freeze({ label: "Communication", value: "Surface operations require a planned relay" }),
   Object.freeze({ label: "Scientific scope", value: "Prioritize observations relevant to settlement" }),
 ]);
@@ -311,7 +370,7 @@ export const MISSION_CONSTRAINTS = Object.freeze([
 export const HOW_TO_STEPS = Object.freeze([
   "Review the mission briefing and choose a profile.",
   "Assign the available mission roles to up to four local player slots.",
-  "Select a landing-site concept and review the planning checklist.",
+  "Configure mission duration, landing context, scientific priorities, resource estimates, and operational strategy.",
   "Configure rover components and review live engineering constraints in the design studio.",
   "Run deterministic resource operations in mission control, then review the challenge and scientist previews.",
   "Review the results screen. No mission outcome is simulated yet.",
@@ -323,6 +382,7 @@ export const INITIAL_GAME_STATE = Object.freeze({
   screenHistory: Object.freeze([]),
   selectedMissionId: MISSION_CATALOG[0].id,
   currentMissionId: null,
+  missionPlan: null,
   selectedChallengeDecisionId: null,
   activePlayerSlotId: PLAYER_SLOTS[0].id,
   playerAssignments: Object.freeze(

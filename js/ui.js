@@ -15,9 +15,14 @@ import {
   selectChallengeDecision,
   selectLandingSite,
   selectMission,
+  selectMissionStrategy,
+  selectPlanningMissionProfile,
+  setMissionObjectivePriority,
   selectPowerEnvironment,
   selectPlayerSlot,
   selectRoverOption,
+  toggleMissionObjective,
+  updateMissionPlanField,
   setPreference,
   subscribe,
   transmitMissionDataToControl,
@@ -36,14 +41,19 @@ import {
   ROVER_CATEGORIES,
   ENGINEERING_LIMITS,
   MISSION_RESOURCE_CONFIG,
+  MISSION_PLANNING_LIMITS,
+  MISSION_STRATEGIES,
+  SCIENCE_CAPABILITY_REQUIREMENTS,
 } from "./data.js";
 import {
   calculateRoverMetrics,
+  getScientificCapabilities,
   validateRoverConfiguration,
 } from "./rover.js";
 import {
   getResourceSummary,
 } from "./resources.js";
+import { validatePlanningInputs } from "./planning.js";
 
 const SCREEN_TITLES = Object.freeze({
   home: "Main menu",
@@ -219,14 +229,42 @@ function renderRoleSlots(state) {
 
 function renderPlanning(state) {
   const mission = MISSION_CATALOG.find(({ id }) => id === state.currentMissionId);
-  if (!mission) {
+  const plan = state.missionPlan;
+  if (!mission || !plan?.configuration) {
     throw new RangeError("Mission planning requires an accepted mission profile.");
   }
+  const { configuration, estimates, risks, validation } = plan;
+  const profile = MISSION_CATALOG.find(({ id }) => id === configuration.missionProfileId);
+  const durationInput = document.querySelector("#planning-duration-input");
+  const selectedIds = new Set(configuration.objectivePriorities.map(({ objectiveId }) => objectiveId));
+  const priorityByObjective = new Map(
+    configuration.objectivePriorities.map(({ objectiveId, priority }) => [objectiveId, priority]),
+  );
+  const scienceCapabilities = new Map(
+    getScientificCapabilities(state.rover)
+      .map((item) => [item.objectiveId, item]),
+  );
+  const credits = (value) => `${Math.round(value).toLocaleString()} cr`;
+  const mass = (value) => value === null ? "—" : `${value.toFixed(1)} kg`;
+  const power = (value) => `${value.toFixed(1)} W`;
+  const hours = (value) => `${value.toFixed(1)} h`;
+
   document.querySelector("#planning-code").textContent = `OPERATION ${mission.id}`;
-  document.querySelector("#planning-mission-title").textContent = mission.title;
-  document.querySelector("#planning-mission-summary").textContent = mission.summary;
-  document.querySelector("#planning-duration").textContent = mission.duration;
-  document.querySelector("#planning-objective").textContent = mission.objective;
+  document.querySelector("#planning-profile").replaceChildren(
+    ...MISSION_CATALOG.map((item) => {
+      const option = makeElement("option", "", `${item.id} · ${item.title}`);
+      option.value = item.id;
+      option.selected = item.id === configuration.missionProfileId;
+      return option;
+    }),
+  );
+  document.querySelector("#planning-name").value = configuration.missionName;
+  durationInput.min = String(MISSION_PLANNING_LIMITS.minimumDurationSols);
+  durationInput.max = String(MISSION_PLANNING_LIMITS.maximumDurationSols);
+  durationInput.value =
+    Number.isFinite(configuration.durationSols) ? configuration.durationSols : "";
+  document.querySelector("#planning-profile-summary").textContent =
+    profile ? `${profile.region} · ${profile.summary}` : "Choose an available mission profile.";
 
   const siteContainer = document.querySelector("#landing-sites");
   siteContainer.replaceChildren(
@@ -240,22 +278,239 @@ function renderPlanning(state) {
       button.append(makeElement("strong", "site-card__name", site.name));
       button.append(makeElement("span", "site-card__terrain", site.terrain));
       button.append(makeElement("span", "site-card__note", site.note));
+      button.append(makeElement("small", "site-card__science", `Science context · ${site.scientificImportance}`));
+      button.append(makeElement("small", "site-card__conditions", site.environmentalConditions));
+      button.append(makeElement("small", "site-card__risk", `Operational consideration · ${site.operationalRisks}`));
+      button.append(makeElement("small", "site-card__communications", `Communications · ${site.communicationConsiderations}`));
       return button;
     }),
   );
-  const selectedSite = LANDING_SITES.find(({ id }) => id === state.selectedLandingSiteId);
-  document.querySelector("#checklist-site").textContent = selectedSite ? `${selectedSite.name} selected` : "No site selected";
-  document.querySelector("#checklist-site-status").textContent = selectedSite ? "READY" : "PENDING";
+
+  const objectives = document.querySelector("#planning-objectives");
+  objectives.replaceChildren(
+    ...SCIENCE_OBJECTIVES.map((objective) => {
+      const selected = selectedIds.has(objective.id);
+      const capability = scienceCapabilities.get(objective.id);
+      const requirements = SCIENCE_CAPABILITY_REQUIREMENTS.find(
+        ({ objectiveId }) => objectiveId === objective.id,
+      );
+      const card = makeElement("article", `planning-objective${selected ? " planning-objective--selected" : ""}`);
+      const header = makeElement("div", "planning-objective__header");
+      const label = makeElement("label", "planning-objective__select");
+      const checkbox = makeElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = selected;
+      checkbox.dataset.objectiveId = objective.id;
+      checkbox.setAttribute("aria-label", `Plan objective: ${objective.name}`);
+      label.append(checkbox, makeElement("strong", "", objective.name));
+      header.append(label);
+      const priority = makeElement("label", "planning-objective__priority");
+      priority.append(makeElement("span", "", "PRIORITY"));
+      const prioritySelect = makeElement("select");
+      prioritySelect.dataset.objectivePriority = objective.id;
+      prioritySelect.disabled = !selected;
+      prioritySelect.setAttribute("aria-label", `${objective.name} priority`);
+      prioritySelect.replaceChildren(
+        ...SCIENCE_OBJECTIVES.map((_, index) => {
+          const option = makeElement("option", "", `P${index + 1}`);
+          option.value = String(index + 1);
+          option.selected = priorityByObjective.get(objective.id) === index + 1;
+          return option;
+        }),
+      );
+      priority.append(prioritySelect);
+      header.append(priority);
+      card.append(header);
+      card.append(makeElement("p", "planning-objective__detail", objective.detail));
+      card.append(makeElement(
+        "p",
+        "planning-objective__importance",
+        objective.id === "agriculture"
+          ? "Settlement relevance: combines regolith chemistry, nutrient-related indicators, potential water indicators, and environmental conditions. These measures do not establish that Martian soil is agriculture-ready."
+          : `Settlement relevance: ${objective.detail}`,
+      ));
+      const required = makeElement("ul", "planning-objective__capabilities");
+      (requirements?.requiredCapabilities ?? []).forEach((item) => {
+        const installed = item.instrumentIds
+          .filter((id) => state.rover.instruments.includes(id))
+          .map((id) => findRoverOption("instruments", id)?.name)
+          .filter(Boolean);
+        const instruments = item.instrumentIds
+          .map((id) => findRoverOption("instruments", id)?.name)
+          .filter(Boolean);
+        const line = makeElement("li", installed.length ? "is-covered" : "");
+        line.append(
+          makeElement("strong", "", item.label),
+          makeElement(
+            "small",
+            "",
+            `Required: ${instruments.join(" or ") || "catalog instrument"} · Installed: ${installed.join(", ") || "none"}`,
+          ),
+        );
+        required.append(line);
+      });
+      card.append(required);
+      const coverage = capability?.coverageStatus === "ready"
+        ? "CAPABILITY COVERED"
+        : capability?.coverageStatus === "partial"
+          ? "PARTIAL CAPABILITY"
+          : "CAPABILITY MISSING";
+      card.append(makeElement(
+        "span",
+        `planning-objective__coverage planning-objective__coverage--${capability?.coverageStatus ?? "not-covered"}`,
+        coverage,
+      ));
+      return card;
+    }),
+  );
+
+  const estimatesContainer = document.querySelector("#planning-resource-estimates");
+  const estimateCard = (title, items) => {
+    const card = makeElement("article", "planning-estimate");
+    card.append(makeElement("h3", "", title));
+    const list = makeElement("dl", "planning-estimate__list");
+    items.forEach(([labelText, value]) => {
+      list.append(makeElement("dt", "", labelText), makeElement("dd", "", value));
+    });
+    card.append(list);
+    return card;
+  };
+  estimatesContainer.replaceChildren(
+    estimateCard("BUDGET · CREDITS", [
+      ["Available", credits(estimates.budget.availableCredits)],
+      ["Rover construction", credits(estimates.budget.constructionCredits)],
+      ["Launch expenditure", credits(estimates.budget.launchCredits)],
+      ["Planned operations", credits(estimates.budget.plannedOperationsCredits)],
+      ["Communications", credits(estimates.budget.plannedCommunicationsCredits)],
+      ["Maintenance allowance", credits(estimates.budget.maintenanceCredits)],
+      ["Estimated remaining", credits(estimates.budget.remainingCredits)],
+    ]),
+    estimateCard("POWER · W / Wh", [
+      ["Selected system", estimates.power.systemName],
+      ["Nominal generation", power(estimates.power.nominalGenerationW)],
+      ["Estimated at site", power(estimates.power.estimatedAvailablePowerW)],
+      ["Estimated peak load", power(estimates.power.estimatedPeakLoadW)],
+      ["Estimated power margin", power(estimates.power.estimatedPowerMarginW)],
+      ["Battery capacity", `${estimates.power.batteryCapacityWh.toFixed(1)} Wh`],
+      ["Estimated reserve", `${estimates.power.estimatedBatteryReserveWh.toFixed(1)} Wh (${estimates.power.estimatedBatteryReservePercentage.toFixed(1)}%)`],
+    ]),
+    estimateCard("DATA · MB", [
+      ["Expected science data", `${estimates.data.expectedScienceDataMB.toFixed(1)} MB`],
+      ["Onboard storage", `${estimates.data.storageCapacityMB.toFixed(1)} MB`],
+      ["Communication capacity", `${estimates.data.communicationCapacityMBPerSol.toFixed(1)} MB/sol`],
+      ["Estimated transmission time", hours(estimates.data.estimatedTransmissionHours)],
+      ["Planned instrument set", estimates.data.plannedInstrumentIds
+        .map((id) => findRoverOption("instruments", id)?.name ?? id)
+        .join(", ") || "No objective instrument selected"],
+    ]),
+    estimateCard("TIME · GAMEPLAY HOURS", [
+      ["Mission duration", `${estimates.time.durationSols} sols · ${hours(estimates.time.durationHours)}`],
+      ["Instrument operations", hours(estimates.time.instrumentOperationHours)],
+      ["Communications", hours(estimates.time.communicationHours)],
+      ["Maintenance allowance", hours(estimates.time.maintenanceAllowanceHours)],
+      ["Emergency reserve", hours(estimates.time.emergencyReserveHours)],
+      ["Estimated unallocated time", hours(estimates.time.planningHoursRemaining)],
+    ]),
+    estimateCard("MASS · KG", [
+      ["Rover mass", mass(estimates.mass.roverMassKg)],
+      ["Instrument payload mass", mass(estimates.mass.instrumentPayloadMassKg)],
+      ["Payload capacity remaining", mass(estimates.mass.remainingPayloadCapacityKg)],
+    ]),
+  );
+
+  const strategies = document.querySelector("#planning-strategies");
+  strategies.replaceChildren(
+    ...MISSION_STRATEGIES.map((strategy) => {
+      const selected = strategy.id === configuration.strategyId;
+      const button = makeElement(
+        "button",
+        `planning-strategy${selected ? " planning-strategy--selected" : ""}`,
+      );
+      button.type = "button";
+      button.dataset.strategyId = strategy.id;
+      button.setAttribute("aria-pressed", String(selected));
+      button.append(makeElement("span", "planning-strategy__tag", selected ? "SELECTED APPROACH" : "PLANNING GUIDANCE"));
+      button.append(makeElement("strong", "", strategy.name));
+      button.append(makeElement("span", "", strategy.description));
+      button.append(makeElement("small", "", `Trade-off · ${strategy.tradeoff}`));
+      button.append(makeElement("small", "", strategy.effect));
+      return button;
+    }),
+  );
+
+  const riskList = document.querySelector("#planning-risk-list");
+  riskList.replaceChildren(...risks.map((item) => {
+    const card = makeElement("article", "planning-risk");
+    card.dataset.severity = item.severity;
+    const meta = makeElement("div", "planning-risk__meta");
+    meta.append(
+      makeElement("span", "planning-risk__category", item.category),
+      makeElement("span", "planning-risk__severity", item.severity.toUpperCase()),
+      makeElement("span", "planning-risk__blocking", item.blocksValidation ? "BLOCKING" : "ADVISORY"),
+    );
+    card.append(meta, makeElement("h3", "", item.description));
+    card.append(makeElement("p", "", item.reason));
+    card.append(makeElement("small", "", `Mitigation · ${item.mitigation}`));
+    return card;
+  }));
+
+  const report = document.querySelector("#planning-validation-report");
+  report.replaceChildren(...validation.checks.map((check) => {
+    const row = makeElement("article", `planning-check${check.passed ? " planning-check--pass" : " planning-check--fail"}`);
+    row.dataset.passed = String(check.passed);
+    row.append(makeElement("span", "planning-check__result", check.passed ? "PASS" : "FAIL"));
+    const content = makeElement("div", "planning-check__content");
+    content.append(makeElement("strong", "", check.label));
+    content.append(makeElement("small", "", check.message));
+    row.append(content);
+    return row;
+  }));
+  const recommendations = document.querySelector("#planning-recommendations");
+  recommendations.replaceChildren(
+    ...(validation.recommendations.length
+      ? validation.recommendations.map((item) => makeElement("li", "", item))
+      : [makeElement("li", "", "No corrective action is required by the current validation report.")]),
+  );
+  document.querySelector("#planning-validation-marker").textContent = validation.validatedAt.toUpperCase();
+  const readiness = validation.overallStatus;
+  const readinessDataset = readiness === "READY"
+    ? "normal"
+    : readiness === "NEEDS ATTENTION"
+      ? "warning"
+      : "critical";
+  const setReadiness = (element) => {
+    element.dataset.status = readinessDataset;
+    element.replaceChildren(
+      makeElement("span", `status-dot ${readiness === "READY" ? "status-dot--live" : "status-dot--warning"}`),
+      document.createTextNode(` ${readiness}`),
+    );
+  };
+  setReadiness(document.querySelector("#planning-readiness"));
+  setReadiness(document.querySelector("#planning-readiness-status"));
+  document.querySelector("#planning-readiness-explanation").textContent =
+    readiness === "READY"
+      ? "All mandatory planning and rover checks pass. The plan is ready to enter mission control."
+      : readiness === "NEEDS ATTENTION"
+        ? "Mandatory requirements pass, but advisory risks remain. Review the risk list before proceeding."
+        : `${validation.failedChecks.length} mandatory check${validation.failedChecks.length === 1 ? "" : "s"} still require attention. Configure the rover next, then return here to correct any remaining blockers.`;
+  const setupValidation = validatePlanningInputs(configuration);
+  const continueButton = document.querySelector("#continue-to-rover");
+  continueButton.disabled = !setupValidation.isValid;
+  continueButton.setAttribute("aria-describedby", "planning-readiness-explanation");
 }
 
 function renderRover(state) {
   const container = document.querySelector("#rover-categories");
+  const objectiveIds = state.missionPlan?.configuration.objectivePriorities
+    .map(({ objectiveId }) => objectiveId) ?? [];
   const metrics = calculateRoverMetrics(state.rover, {
     selectedLandingSiteId: state.selectedLandingSiteId,
   });
   const validation = validateRoverConfiguration(state.rover, ENGINEERING_LIMITS, {
     selectedLandingSiteId: state.selectedLandingSiteId,
+    objectiveIds,
   });
+  const missionValidation = state.missionPlan?.validation;
   const formatCredits = (value) => `${Math.round(value).toLocaleString()} cr`;
   const formatMass = (value) => `${value.toFixed(1)} kg`;
   const formatPower = (value) => `${value.toFixed(1)} W`;
@@ -296,7 +551,16 @@ function renderRover(state) {
     makeElement("span", `status-dot ${validation.isValid ? "status-dot--live" : "status-dot--warning"}`),
     makeElement("span", "", validation.isValid ? "ENGINEERING LIMITS MET" : "CONFIGURATION INCOMPLETE"),
   );
-  document.querySelector("#continue-to-control").disabled = !validation.isValid;
+  document.querySelector("#continue-to-control").disabled =
+    !validation.isValid || !missionValidation?.isReady;
+  const readinessSummary = document.querySelector("#rover-readiness-summary");
+  readinessSummary.dataset.status = missionValidation?.isReady ? "normal" : "critical";
+  readinessSummary.textContent = missionValidation?.isReady
+    ? `Mission validation: ${missionValidation.overallStatus}. You can proceed to Mission Control.`
+    : `Mission validation: ${missionValidation?.overallStatus ?? "NOT READY"}. ${
+      missionValidation?.failedChecks.slice(0, 3).map(({ message }) => message).join(" ")
+      ?? "Return to mission planning and complete the plan."
+    }`;
 
   const errors = document.querySelector("#rover-errors");
   errors.replaceChildren(...validation.errors.map(({ message }) => {
@@ -803,6 +1067,10 @@ function handleClick(event) {
     assignRole(target.dataset.roleId);
   } else if (target.dataset.siteId) {
     selectLandingSite(target.dataset.siteId);
+    document.querySelector(`[data-site-id="${target.dataset.siteId}"]`)?.focus();
+  } else if (target.dataset.strategyId) {
+    selectMissionStrategy(target.dataset.strategyId);
+    document.querySelector(`[data-strategy-id="${target.dataset.strategyId}"]`)?.focus();
   } else if (target.dataset.roverCategory && target.dataset.roverOption) {
     selectRoverOption(target.dataset.roverCategory, target.dataset.roverOption);
   } else if (target.dataset.decisionId) {
@@ -816,6 +1084,21 @@ function handleChange(event) {
   const target = event.target;
   if (target instanceof HTMLInputElement && target.dataset.preference === "reduceMotion") {
     setPreference("reduceMotion", target.checked);
+  } else if (target instanceof HTMLInputElement && target.dataset.objectiveId) {
+    const objectiveId = target.dataset.objectiveId;
+    toggleMissionObjective(objectiveId);
+    document.querySelector(`[data-objective-id="${objectiveId}"]`)?.focus();
+  } else if (target instanceof HTMLInputElement && target.id === "planning-name") {
+    updateMissionPlanField("missionName", target.value);
+  } else if (target instanceof HTMLInputElement && target.id === "planning-duration-input") {
+    updateMissionPlanField("durationSols", target.value);
+  } else if (target instanceof HTMLSelectElement && target.id === "planning-profile") {
+    selectPlanningMissionProfile(target.value);
+    document.querySelector("#planning-profile")?.focus();
+  } else if (target instanceof HTMLSelectElement && target.dataset.objectivePriority) {
+    const objectiveId = target.dataset.objectivePriority;
+    setMissionObjectivePriority(objectiveId, Number(target.value));
+    document.querySelector(`[data-objective-priority="${objectiveId}"]`)?.focus();
   } else if (target instanceof HTMLSelectElement && target.id === "power-environment") {
     selectPowerEnvironment(target.value);
   }

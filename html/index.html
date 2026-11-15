@@ -257,61 +257,124 @@
               <div>
                 <p class="eyebrow">03 <span class="eyebrow__separator">/</span> MISSION DEFINITION</p>
                 <h1 id="planning-title">Mission planning</h1>
-                <p class="page-heading__description">Set an exploration context before moving into vehicle design.</p>
+                <p class="page-heading__description">Set priorities, compare planning estimates, and validate a coherent mission before configuring the rover.</p>
               </div>
-              <span class="mission-status"><span class="status-dot status-dot--warning" aria-hidden="true"></span> PLAN IN PROGRESS</span>
+              <span class="mission-status" id="planning-readiness" data-status="critical"><span class="status-dot status-dot--warning" aria-hidden="true"></span> NOT READY</span>
             </div>
 
-            <div class="planning-summary panel">
-              <div class="planning-summary__mission">
-                <p class="eyebrow" id="planning-code">SELECTED OPERATION</p>
-                <h2 id="planning-mission-title">—</h2>
-                <p id="planning-mission-summary"></p>
+            <section class="panel planning-overview" aria-labelledby="planning-overview-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">SECTION A · MISSION OVERVIEW</p>
+                  <h2 id="planning-overview-title">Define the mission</h2>
+                </div>
+                <span class="classification" id="planning-code">MISSION PROFILE</span>
               </div>
-              <div class="planning-summary__facts">
-                <span>MISSION DURATION<strong id="planning-duration">—</strong></span>
-                <span>PRIMARY OBJECTIVE<strong id="planning-objective">—</strong></span>
+              <div class="planning-input-grid">
+                <label class="planning-field">
+                  <span>MISSION PROFILE</span>
+                  <select id="planning-profile" aria-label="Mission profile"></select>
+                </label>
+                <label class="planning-field">
+                  <span>MISSION NAME</span>
+                  <input id="planning-name" type="text" maxlength="80" autocomplete="off">
+                </label>
+                <label class="planning-field">
+                  <span>DURATION <small>(sols)</small></span>
+                  <input id="planning-duration-input" type="number" min="1" max="30" step="1" inputmode="numeric" aria-describedby="planning-duration-help">
+                  <small id="planning-duration-help">Planning range: 1–30 gameplay sols.</small>
+                </label>
               </div>
-            </div>
+              <p class="planning-profile-summary" id="planning-profile-summary"></p>
+            </section>
 
-            <div class="planning-layout">
-              <section class="panel site-panel" aria-labelledby="landing-title">
-                <div class="panel__header">
-                  <div>
-                    <p class="eyebrow">SURFACE OPERATIONS</p>
-                    <h2 id="landing-title">Landing-site concept</h2>
-                  </div>
-                  <span class="classification">SELECT ONE</span>
+            <section class="panel site-panel" aria-labelledby="landing-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">SECTION A · SURFACE OPERATIONS</p>
+                  <h2 id="landing-title">Landing-site concept</h2>
                 </div>
-                <div class="site-grid" id="landing-sites" role="group" aria-label="Select a conceptual landing site"></div>
-                <p class="panel-footnote">Site descriptions are educational planning context, not a safety assessment or simulated terrain model.</p>
-              </section>
+                <span class="classification">SELECT ONE</span>
+              </div>
+              <div class="site-grid" id="landing-sites" role="group" aria-label="Select a conceptual landing site"></div>
+              <p class="panel-footnote">All site conditions and suitability notes are illustrative planning context, not verified environmental forecasts, terrain data, or landing-safety assessments.</p>
+            </section>
 
-              <aside class="panel planning-aside" aria-labelledby="plan-checklist-title">
-                <div class="panel__header">
-                  <div>
-                    <p class="eyebrow">PREFLIGHT WORKSHEET</p>
-                    <h2 id="plan-checklist-title">Planning checklist</h2>
-                  </div>
-                  <span class="panel__index">01—04</span>
+            <section class="panel planning-objectives-panel" aria-labelledby="planning-objectives-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">SECTION B · SCIENCE PROGRAM</p>
+                  <h2 id="planning-objectives-title">Scientific objectives & priorities</h2>
                 </div>
-                <ol class="checklist">
-                  <li><span>01</span><span><strong>Confirm science priorities</strong><small>Mission objectives reviewed</small></span><i>READY</i></li>
-                  <li><span>02</span><span><strong>Choose a landing context</strong><small id="checklist-site">Jezero Crater selected</small></span><i id="checklist-site-status">READY</i></li>
-                  <li><span>03</span><span><strong>Design the rover concept</strong><small>Equipment trade-offs to review</small></span><i>PENDING</i></li>
-                  <li><span>04</span><span><strong>Review mission constraints</strong><small>Pending rover mass, cost & power validation</small></span><i>PENDING</i></li>
-                </ol>
-                <div class="resource-allocation">
-                  <p class="eyebrow">AVAILABLE RESOURCES</p>
-                  <div><span>Power</span><strong>Allocation not modeled</strong></div>
-                  <div><span>Supplies</span><strong>Allocation not modeled</strong></div>
-                  <div><span>Budget & mass</span><strong>Validated in design studio</strong></div>
+                <span class="classification">PLANNED · NOT COMPLETED</span>
+              </div>
+              <div class="planning-objectives" id="planning-objectives" aria-describedby="planning-objectives-help"></div>
+              <p class="panel-footnote" id="planning-objectives-help">Select one or more objectives and assign a priority. Instrument coverage is validated against the existing capability catalog; selection does not mean science has been performed. Agricultural viability requires multiple independent lines of evidence and is not established by soil measurements alone.</p>
+            </section>
+
+            <section class="panel planning-resources-panel" aria-labelledby="planning-resources-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">SECTION C · RESOURCE ALLOCATION</p>
+                  <h2 id="planning-resources-title">Planning estimates</h2>
                 </div>
-              </aside>
-            </div>
+                <span class="classification">ILLUSTRATIVE ESTIMATES</span>
+              </div>
+              <div class="planning-resource-grid" id="planning-resource-estimates"></div>
+              <p class="panel-footnote">Estimates use the selected catalog components and deterministic resource formulas. Operation times, planned observations, and contingency are planning estimates, not mission forecasts.</p>
+            </section>
+
+            <section class="panel planning-strategy-panel" aria-labelledby="planning-strategy-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">SECTION D · OPERATIONAL APPROACH</p>
+                  <h2 id="planning-strategy-title">Choose a planning strategy</h2>
+                </div>
+                <span class="classification">GUIDANCE ONLY</span>
+              </div>
+              <div class="planning-strategies" id="planning-strategies" role="group" aria-label="Select operational strategy"></div>
+              <p class="panel-footnote">Strategies explain trade-offs only. None secretly changes mission resources, alters calculations, or guarantees success.</p>
+            </section>
+
+            <section class="panel planning-risks-panel" aria-labelledby="planning-risks-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">SECTION E · DETERMINISTIC REVIEW</p>
+                  <h2 id="planning-risks-title">Risk assessment</h2>
+                </div>
+                <span class="classification">CONFIGURATION-BASED</span>
+              </div>
+              <div class="planning-risk-list" id="planning-risk-list" aria-live="polite"></div>
+            </section>
+
+            <section class="panel planning-validation-panel" aria-labelledby="planning-validation-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">SECTION F · MANDATORY CHECKS</p>
+                  <h2 id="planning-validation-title">Mission validation report</h2>
+                </div>
+                <span class="classification" id="planning-validation-marker">DETERMINISTIC STATE CHECK</span>
+              </div>
+              <div class="planning-validation-list" id="planning-validation-report" aria-live="polite"></div>
+              <div class="planning-recommendations">
+                <h3>Recommended corrections</h3>
+                <ul id="planning-recommendations"></ul>
+              </div>
+            </section>
+
+            <section class="panel planning-readiness-panel" aria-labelledby="planning-readiness-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">SECTION G · MISSION READINESS</p>
+                  <h2 id="planning-readiness-title">Readiness determination</h2>
+                </div>
+                <span class="mission-status" id="planning-readiness-status" data-status="critical">NOT READY</span>
+              </div>
+              <p id="planning-readiness-explanation" aria-live="polite"></p>
+            </section>
             <div class="page-actions">
               <button class="button button--secondary" type="button" data-action="back">← Back to team roles</button>
-              <button class="button button--primary" type="button" data-route="rover">Continue to rover design <span aria-hidden="true">→</span></button>
+              <button class="button button--primary" id="continue-to-rover" type="button" data-route="rover">Continue to rover design <span aria-hidden="true">→</span></button>
             </div>
           </section>
 
@@ -428,6 +491,7 @@
                 </div>
               </section>
             </section>
+            <p class="mission-readiness-note" id="rover-readiness-summary" aria-live="polite"></p>
             <div class="page-actions">
               <button class="button button--secondary" type="button" data-action="back">← Back to mission plan</button>
               <button class="button button--primary" id="continue-to-control" type="button" data-route="control">Open mission control preview <span aria-hidden="true">→</span></button>
