@@ -375,6 +375,8 @@ export function createMissionResources({
       ...power,
       batteryCapacityWh: settings.batteryCapacityWh,
       batteryEnergyWh: round(settings.batteryCapacityWh * settings.initialBatteryFraction),
+      challengePowerFactor: 1,
+      equipmentPowerFactor: 1,
       energyGeneratedWh: 0,
       energyConsumedWh: 0,
       lastLoadW: 0,
@@ -397,6 +399,7 @@ export function createMissionResources({
       communicationCredits: 0,
       maintenanceCredits: 0,
       sampleCredits: 0,
+      challengeCredits: 0,
       remainingCredits: settings.initialBudgetCredits - initialExpenditure,
     },
     data: {
@@ -748,6 +751,103 @@ export function recordEmergencyDelay(
   }, settings);
 }
 
+export function recordChallengeConsequences(
+  resources,
+  roverConfiguration,
+  {
+    challengeId,
+    description,
+    durationHours = 0,
+    batteryDeltaWh = 0,
+    environmentalPowerFactor = null,
+    equipmentPowerFactor = null,
+    budgetCostCredits = 0,
+    settings = MISSION_RESOURCE_CONFIG,
+  } = {},
+) {
+  if (typeof challengeId !== "string" || challengeId.length === 0) {
+    throw new TypeError("Challenge consequences require a challenge identifier.");
+  }
+  if (typeof description !== "string" || description.length === 0) {
+    throw new TypeError("Challenge consequences require a description.");
+  }
+  assertFiniteNonNegative(durationHours, "Challenge duration");
+  assertFiniteNonNegative(budgetCostCredits, "Challenge budget cost");
+  if (!Number.isFinite(batteryDeltaWh)) {
+    throw new RangeError("Challenge battery change must be a finite number.");
+  }
+  for (const [label, factor] of [
+    ["Environmental power factor", environmentalPowerFactor],
+    ["Equipment power factor", equipmentPowerFactor],
+  ]) {
+    if (factor !== null && (!Number.isFinite(factor) || factor < 0 || factor > 1)) {
+      throw new RangeError(`${label} must be a number from zero to one.`);
+    }
+  }
+  const timed = durationHours > 0
+    ? recordEmergencyDelay(resources, roverConfiguration, durationHours, settings)
+    : resources;
+  if (budgetCostCredits > timed.budget.remainingCredits) {
+    throw new Error(
+      `Challenge response costs ${budgetCostCredits} credits after timed operation costs, but only ${timed.budget.remainingCredits} credits remain.`,
+    );
+  }
+  const batteryEnergyWh = round(timed.power.batteryEnergyWh + batteryDeltaWh);
+  if (batteryEnergyWh < 0 || batteryEnergyWh > timed.power.batteryCapacityWh) {
+    throw new Error(
+      `Challenge response would leave ${batteryEnergyWh} Wh in the battery, outside its 0–${timed.power.batteryCapacityWh} Wh capacity.`,
+    );
+  }
+  const basePower = calculateAvailablePower(
+    roverConfiguration,
+    timed.power.environment,
+    settings,
+  );
+  const challengePowerFactor = environmentalPowerFactor === null || !basePower.isSolar
+    ? timed.power.challengePowerFactor ?? 1
+    : environmentalPowerFactor;
+  const equipmentFactor = equipmentPowerFactor
+    ?? timed.power.equipmentPowerFactor
+    ?? 1;
+  const power = {
+    ...timed.power,
+    ...basePower,
+    challengePowerFactor,
+    equipmentPowerFactor: equipmentFactor,
+    availablePowerW: round(basePower.availablePowerW * challengePowerFactor * equipmentFactor),
+    batteryEnergyWh,
+    energyConsumedWh: round(
+      timed.power.energyConsumedWh + Math.max(0, -batteryDeltaWh),
+    ),
+    energyGeneratedWh: round(
+      timed.power.energyGeneratedWh + Math.max(0, batteryDeltaWh),
+    ),
+    status: calculateBatteryLevel({ ...timed.power, batteryEnergyWh }).status,
+  };
+  const next = withStatuses({
+    ...timed,
+    power,
+    budget: {
+      ...timed.budget,
+      challengeCredits: round((timed.budget.challengeCredits ?? 0) + budgetCostCredits),
+      remainingCredits: round(timed.budget.remainingCredits - budgetCostCredits),
+    },
+  });
+  return eventFor(
+    next,
+    "challenge-consequence",
+    description,
+    {
+      challengeId,
+      elapsedHours: durationHours,
+      batteryEnergyWh: round(batteryEnergyWh - resources.power.batteryEnergyWh),
+      batteryPenaltyWh: batteryDeltaWh,
+      availablePowerW: round(power.availablePowerW - resources.power.availablePowerW),
+      budgetCredits: -budgetCostCredits,
+    },
+  );
+}
+
 export function recordMaintenance(
   resources,
   roverConfiguration,
@@ -809,20 +909,29 @@ export function setPowerEnvironment(
 ) {
   const environment = getEnvironment(environmentId, settings);
   const availability = calculateAvailablePower(roverConfiguration, environment, settings);
+  const challengePowerFactor = resources.power.challengePowerFactor ?? 1;
+  const equipmentPowerFactor = resources.power.equipmentPowerFactor ?? 1;
   const next = {
     ...resources,
     power: {
       ...resources.power,
       ...availability,
+      challengePowerFactor,
+      equipmentPowerFactor,
+      availablePowerW: round(
+        availability.availablePowerW * challengePowerFactor * equipmentPowerFactor,
+      ),
       environment,
     },
   };
   return eventFor(
     withStatuses(next),
     "power-environment-updated",
-    `Power environment set to ${environment.label}; available generation is ${availability.availablePowerW} W.`,
+    `Power environment set to ${environment.label}; available generation is ${next.power.availablePowerW} W.`,
     {
-      availablePowerW: round(availability.availablePowerW - resources.power.availablePowerW),
+      availablePowerW: round(
+        next.power.availablePowerW - resources.power.availablePowerW,
+      ),
     },
   );
 }
@@ -850,7 +959,8 @@ export function getResourceSummary(resources) {
         + resources.budget.operationsCredits
         + resources.budget.communicationCredits
         + resources.budget.maintenanceCredits
-        + resources.budget.sampleCredits,
+        + resources.budget.sampleCredits
+        + (resources.budget.challengeCredits ?? 0),
       status: resources.status.budget,
     },
     data: {

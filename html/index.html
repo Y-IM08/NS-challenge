@@ -52,7 +52,7 @@
           <li data-stage="planning"><span>03</span><span>Mission plan</span></li>
           <li data-stage="rover"><span>04</span><span>Rover design</span></li>
           <li data-stage="control"><span>05</span><span>Mission control</span></li>
-          <li data-stage="challenge"><span>06</span><span>Field scenario</span></li>
+          <li data-stage="challenge"><span>06</span><span>Challenge center</span></li>
           <li data-stage="scientist"><span>07</span><span>Science briefing</span></li>
           <li data-stage="results"><span>08</span><span>Results review</span></li>
         </ol>
@@ -494,7 +494,7 @@
             <p class="mission-readiness-note" id="rover-readiness-summary" aria-live="polite"></p>
             <div class="page-actions">
               <button class="button button--secondary" type="button" data-action="back">← Back to mission plan</button>
-              <button class="button button--primary" id="continue-to-control" type="button" data-route="control">Open mission control preview <span aria-hidden="true">→</span></button>
+              <button class="button button--primary" id="continue-to-control" type="button" data-route="control">Open mission control <span aria-hidden="true">→</span></button>
             </div>
           </section>
 
@@ -524,6 +524,32 @@
                 <button class="button button--primary" type="button" data-execution-action="complete">Complete mission</button>
               </div>
               <p id="execution-action-status" class="resource-operation-status" role="status" aria-live="polite"></p>
+            </section>
+
+            <section class="panel mission-challenges" aria-labelledby="mission-challenges-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">DETERMINISTIC FIELD EVENTS</p>
+                  <h2 id="mission-challenges-title">Mission challenges</h2>
+                </div>
+                <span class="classification">LIVE OPERATIONS</span>
+              </div>
+              <p id="control-challenge-status" class="resource-operation-status" role="status" aria-live="polite"></p>
+              <div id="control-active-challenges" class="challenge-runtime-list"></div>
+              <div class="challenge-runtime-summary">
+                <section aria-labelledby="control-equipment-title">
+                  <h3 id="control-equipment-title">Equipment condition</h3>
+                  <div id="control-equipment-condition" class="equipment-condition-list"></div>
+                </section>
+                <section aria-labelledby="control-challenge-evaluation-title">
+                  <h3 id="control-challenge-evaluation-title">Challenge evaluation</h3>
+                  <div id="control-challenge-performance" class="challenge-performance"></div>
+                </section>
+              </div>
+              <details class="challenge-runtime-history">
+                <summary>Challenge history</summary>
+                <div id="control-challenge-history" class="challenge-history-list"></div>
+              </details>
             </section>
 
             <div class="control-status-grid">
@@ -697,7 +723,7 @@
             </section>
             <div class="page-actions">
               <button class="button button--secondary" type="button" data-action="back">← Back to rover design</button>
-              <button class="button button--primary" type="button" data-route="challenge">Open field scenario preview <span aria-hidden="true">→</span></button>
+              <button class="button button--primary" type="button" data-route="challenge">Open challenge center <span aria-hidden="true">→</span></button>
             </div>
           </section>
 
@@ -705,52 +731,28 @@
             <div class="page-heading">
               <div>
                 <p class="eyebrow">06 <span class="eyebrow__separator">/</span> OPERATIONAL DECISION</p>
-                <h1 id="challenge-view-title">Field scenario</h1>
-                <p class="page-heading__description">A reusable challenge presentation layout. This scenario does not affect the mission.</p>
+                <h1 id="challenge-view-title">Challenge center</h1>
+                <p class="page-heading__description">Resolve active environmental events and recover equipment using the live mission state and resource ledger.</p>
               </div>
-              <span class="mission-status"><span class="status-dot status-dot--warning" aria-hidden="true"></span> DISCUSSION PREVIEW</span>
+              <span class="mission-status"><span class="status-dot status-dot--live" aria-hidden="true"></span> MISSION LINKED</span>
             </div>
-
-            <div class="challenge-layout">
-              <article class="panel challenge-brief">
-                <div class="panel__topline">
-                  <span class="eyebrow" id="challenge-code">FIELD SCENARIO</span>
-                  <span class="severity-indicator"><span class="status-dot status-dot--warning" aria-hidden="true"></span><span id="challenge-severity">ELEVATED</span></span>
-                </div>
-                <div class="challenge-brief__body">
-                  <p class="eyebrow eyebrow--orange">SITUATION REPORT</p>
-                  <h2 id="challenge-title">A dust front approaches</h2>
-                  <p id="challenge-description"></p>
-                  <div class="challenge-situation">
-                    <span class="challenge-situation__icon" aria-hidden="true">!</span>
-                    <div><strong>OPERATIONAL CONTEXT</strong><p>Conditions described here are narrative prompts only; no environmental model is running.</p></div>
-                  </div>
-                </div>
-              </article>
-              <aside class="panel consequence-panel" aria-labelledby="consequence-title">
-                <div class="panel__header">
-                  <div>
-                    <p class="eyebrow">DECISION SUPPORT</p>
-                    <h2 id="consequence-title">Consequence area</h2>
-                  </div>
-                  <span class="panel__index">PREVIEW</span>
-                </div>
-                <div class="consequence-panel__content">
-                  <span class="status-dot status-dot--warning" aria-hidden="true"></span>
-                  <p id="consequence-copy">Select a response to record it as a discussion prompt.</p>
-                  <small id="consequence-notice"></small>
-                </div>
-              </aside>
-            </div>
-            <section class="decision-section" aria-labelledby="decisions-title">
-              <div class="section-heading section-heading--compact">
-                <div>
-                  <p class="eyebrow">AVAILABLE RESPONSES</p>
-                  <h2 id="decisions-title">What should the team discuss?</h2>
-                </div>
-                <span class="classification">NO SIMULATED OUTCOME</span>
+            <section class="panel mission-challenges">
+              <p id="field-challenge-status" class="resource-operation-status" role="status" aria-live="polite"></p>
+              <div id="field-active-challenges" class="challenge-runtime-list"></div>
+              <div class="challenge-runtime-summary">
+                <section aria-labelledby="field-equipment-title">
+                  <h2 id="field-equipment-title">Equipment condition</h2>
+                  <div id="field-equipment-condition" class="equipment-condition-list"></div>
+                </section>
+                <section aria-labelledby="field-evaluation-title">
+                  <h2 id="field-evaluation-title">Challenge evaluation</h2>
+                  <div id="field-challenge-performance" class="challenge-performance"></div>
+                </section>
               </div>
-              <div class="decision-grid" id="challenge-decisions" role="group" aria-label="Choose a discussion prompt"></div>
+              <details class="challenge-runtime-history" open>
+                <summary>Challenge history</summary>
+                <div id="field-challenge-history" class="challenge-history-list"></div>
+              </details>
             </section>
             <div class="page-actions">
               <button class="button button--secondary" type="button" data-action="back">← Back to mission control</button>
@@ -886,7 +888,7 @@
             </div>
             <section class="panel guide-panel">
               <ol class="guide-steps" id="how-to-steps"></ol>
-              <div class="guide-notice"><span class="status-dot status-dot--warning" aria-hidden="true"></span><p>Resource accounting and event logging are active in Mission Control. Rover physics, science outcomes, challenge consequences, scoring, and online multiplayer are not implemented.</p></div>
+              <div class="guide-notice"><span class="status-dot status-dot--warning" aria-hidden="true"></span><p>Resource accounting, deterministic challenge consequences, equipment recovery, and event logging are active in Mission Control. Rover physics, scientific outcomes, real mission-success scoring, and online multiplayer are not simulated.</p></div>
             </section>
             <div class="page-actions"><button class="button button--secondary" type="button" data-action="return-menu">← Back to main menu</button><button class="button button--primary" type="button" data-route="briefing">Start mission <span aria-hidden="true">→</span></button></div>
           </section>

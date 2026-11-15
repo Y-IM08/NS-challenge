@@ -12,7 +12,6 @@ import {
   resetRoverConfiguration,
   resetMission,
   returnToMenu,
-  selectChallengeDecision,
   selectLandingSite,
   selectMission,
   selectMissionStrategy,
@@ -28,7 +27,6 @@ import {
   transmitMissionDataToControl,
 } from "./state.js";
 import {
-  CHALLENGE_PRESENTATION,
   HOW_TO_STEPS,
   LANDING_SITES,
   MISSION_CATALOG,
@@ -66,6 +64,7 @@ import {
   getAvailableScientificOperations,
   moveRoverToDestination,
   pauseMission,
+  resolveChallenge,
   resumeMission,
   selectMissionDestination,
 } from "./state.js";
@@ -868,7 +867,7 @@ function renderControl(state) {
   document.querySelector("#resource-budget-remaining").textContent =
     formatCredits(resources.budget.remainingCredits);
   document.querySelector("#resource-budget-breakdown").textContent =
-    `Construction ${formatCredits(resources.budget.constructionCredits)} · Launch ${formatCredits(resources.budget.launchCredits)} · Operations ${formatCredits(resources.budget.operationsCredits)} · Communications ${formatCredits(resources.budget.communicationCredits)} · Maintenance ${formatCredits(resources.budget.maintenanceCredits)} · Samples ${formatCredits(resources.budget.sampleCredits)}`;
+    `Construction ${formatCredits(resources.budget.constructionCredits)} · Launch ${formatCredits(resources.budget.launchCredits)} · Operations ${formatCredits(resources.budget.operationsCredits)} · Communications ${formatCredits(resources.budget.communicationCredits)} · Maintenance ${formatCredits(resources.budget.maintenanceCredits)} · Samples ${formatCredits(resources.budget.sampleCredits)} · Challenges ${formatCredits(resources.budget.challengeCredits)}`;
   document.querySelector("#resource-data-generated").textContent =
     `${resources.data.generatedMB.toFixed(1)} MB`;
   document.querySelector("#resource-data-stored").textContent =
@@ -1054,32 +1053,145 @@ function renderControl(state) {
       return item;
     }),
   );
+  renderChallengeCenter(state, "control");
 }
 
-function renderChallenge(state) {
-  document.querySelector("#challenge-code").textContent = CHALLENGE_PRESENTATION.id;
-  document.querySelector("#challenge-severity").textContent = CHALLENGE_PRESENTATION.severity;
-  document.querySelector("#challenge-title").textContent = CHALLENGE_PRESENTATION.title;
-  document.querySelector("#challenge-description").textContent = CHALLENGE_PRESENTATION.description;
-  document.querySelector("#consequence-notice").textContent = CHALLENGE_PRESENTATION.consequenceNotice;
-  const selected = CHALLENGE_PRESENTATION.decisions.find(
-    ({ id }) => id === state.selectedChallengeDecisionId,
+function consequencePreview(challenge, decision, isSolarPowered) {
+  const effects = decision.effects;
+  const details = [];
+  if (effects.durationHours > 0) {
+    details.push(`Mission time +${effects.durationHours} h`);
+  }
+  if (effects.batteryDeltaWh < 0) {
+    details.push(`Additional battery draw ${Math.abs(effects.batteryDeltaWh)} Wh`);
+  } else if (effects.batteryDeltaWh > 0) {
+    details.push(`Battery gain ${effects.batteryDeltaWh} Wh`);
+  }
+  if (effects.environmentalPowerFactor !== undefined) {
+    details.push(isSolarPowered
+      ? `Solar availability set to ${Math.round(effects.environmentalPowerFactor * 100)}%`
+      : "Solar availability adjustment does not apply to radioisotope power");
+  }
+  if (effects.budgetCostCredits > 0) {
+    details.push(`Budget −${effects.budgetCostCredits} cr`);
+  } else if (challenge.category === "equipment") {
+    details.push("Equipment condition restored after recovery");
+  }
+  return details.join(" · ");
+}
+
+function renderChallengeCenter(state, prefix) {
+  const execution = state.missionExecution;
+  const activeContainer = document.querySelector(`#${prefix}-active-challenges`);
+  const historyContainer = document.querySelector(`#${prefix}-challenge-history`);
+  const status = document.querySelector(`#${prefix}-challenge-status`);
+  if (!execution) {
+    activeContainer.replaceChildren(makeElement("p", "inline-status", "Mission execution is not initialized."));
+    historyContainer.replaceChildren();
+    status.textContent = "";
+    return;
+  }
+
+  const active = execution.challengeHistory.filter(({ status: challengeStatus }) =>
+    challengeStatus === "ACTIVE");
+  activeContainer.replaceChildren(
+    ...(active.length
+      ? active.map((challenge) => {
+        const card = makeElement("article", "challenge-runtime-card");
+        card.dataset.severity = challenge.severity.toLowerCase();
+        const heading = makeElement("div", "challenge-runtime-card__heading");
+        heading.append(makeElement("span", "eyebrow", `${challenge.category.toUpperCase()} · ${challenge.severity}`));
+        heading.append(makeElement("strong", "", challenge.title));
+        card.append(heading);
+        card.append(makeElement("p", "", challenge.description));
+        const location = getMissionWaypoint(challenge.locationId);
+        card.append(makeElement(
+          "small",
+          "challenge-runtime-card__context",
+          `${location?.name ?? "Mission area"} · triggered at ${challenge.triggeredAt}`,
+        ));
+        const decisions = makeElement("div", "challenge-runtime-decisions");
+        challenge.decisions.forEach((decision) => {
+          const option = makeElement("div", "challenge-runtime-decision");
+          option.append(makeElement("strong", "", decision.title));
+          option.append(makeElement("small", "", decision.detail));
+          option.append(makeElement(
+            "small",
+            "challenge-runtime-decision__preview",
+            consequencePreview(challenge, decision, state.resources?.power.isSolar ?? false),
+          ));
+          const button = makeElement(
+            "button",
+            "button button--secondary",
+            challenge.category === "equipment" ? "Recover equipment" : "Apply decision",
+          );
+          button.type = "button";
+          button.dataset.challengeId = challenge.challengeId;
+          button.dataset.challengeDecision = decision.id;
+          button.disabled = execution.status !== "ACTIVE";
+          option.append(button);
+          decisions.append(option);
+        });
+        card.append(decisions);
+        return card;
+      })
+      : [makeElement("p", "inline-status", "No active challenges. Deterministic time, location, and resource triggers are being monitored.")]),
   );
-  document.querySelector("#consequence-copy").textContent = selected
-    ? `Discussion prompt selected: ${selected.title}. The mission state is unchanged.`
-    : "Select a response to record it as a discussion prompt.";
-  document.querySelector("#challenge-decisions").replaceChildren(
-    ...CHALLENGE_PRESENTATION.decisions.map((decision) => {
-      const isSelected = state.selectedChallengeDecisionId === decision.id;
-      const button = makeElement("button", `decision-card${isSelected ? " decision-card--selected" : ""}`);
-      button.type = "button";
-      button.dataset.decisionId = decision.id;
-      button.setAttribute("aria-pressed", String(isSelected));
-      button.append(makeElement("span", "decision-card__index", isSelected ? "SELECTED" : "RESPONSE OPTION"));
-      button.append(makeElement("strong", "", decision.title));
-      button.append(makeElement("small", "", decision.detail));
-      return button;
+  status.textContent = executionActionError
+    || `${active.length} active · ${execution.challengeEvaluation.challengesResolved} resolved`;
+  status.dataset.status = executionActionError ? "critical" : active.length ? "warning" : "normal";
+
+  const condition = execution.operationalCondition;
+  const equipment = [
+    ["Wheels", condition.wheels],
+    ["Communications", condition.communications],
+    ...Object.entries(condition.instruments).map(([instrumentId, instrumentStatus]) => [
+      findRoverOption("instruments", instrumentId)?.name ?? instrumentId,
+      instrumentStatus,
+    ]),
+    ["Power generation", `${Math.round(condition.powerGenerationFactor * 100)}% output`],
+    ["Operating mode", condition.operatingMode],
+  ];
+  document.querySelector(`#${prefix}-equipment-condition`).replaceChildren(
+    ...equipment.map(([label, value]) => {
+      const item = makeElement("div", "equipment-condition");
+      item.append(makeElement("span", "", label));
+      item.append(makeElement("strong", "", String(value).toUpperCase()));
+      return item;
     }),
+  );
+
+  const evaluation = execution.challengeEvaluation;
+  document.querySelector(`#${prefix}-challenge-performance`).replaceChildren(
+    ...[
+      ["Performance", `${evaluation.performanceScore} / 100`],
+      ["Encountered / resolved", `${evaluation.challengesEncountered} / ${evaluation.challengesResolved}`],
+      ["Equipment failures / recoveries", `${evaluation.equipmentFailures} / ${evaluation.successfulRecoveries}`],
+      ["Challenge resource cost", `${evaluation.resourceCosts.timeHours.toFixed(1)} h · ${evaluation.resourceCosts.batteryWh.toFixed(0)} Wh · ${evaluation.resourceCosts.budgetCredits.toFixed(0)} cr`],
+    ].map(([label, value]) => {
+      const item = makeElement("div", "challenge-performance__item");
+      item.append(makeElement("span", "", label));
+      item.append(makeElement("strong", "", value));
+      return item;
+    }),
+  );
+  historyContainer.replaceChildren(
+    ...(execution.challengeHistory.length
+      ? [...execution.challengeHistory].reverse().map((challenge) => {
+        const item = makeElement("article", "challenge-history-entry");
+        item.dataset.status = challenge.status.toLowerCase();
+        item.append(makeElement("strong", "", challenge.title));
+        item.append(makeElement(
+          "span",
+          "",
+          challenge.status === "RESOLVED"
+            ? `Resolved: ${challenge.resolution.title}`
+            : `${challenge.severity} · awaiting decision`,
+        ));
+        item.append(makeElement("small", "", challenge.resolvedAt ?? challenge.triggeredAt));
+        return item;
+      })
+      : [makeElement("p", "inline-status", "No challenges encountered yet.")]),
   );
 }
 
@@ -1178,7 +1290,7 @@ function render(state) {
   if (state.screen === "planning") renderPlanning(state);
   if (state.screen === "rover") renderRover(state);
   if (state.screen === "control") renderControl(state);
-  if (state.screen === "challenge") renderChallenge(state);
+  if (state.screen === "challenge") renderChallengeCenter(state, "field");
   if (state.screen === "scientist") renderScientist();
   if (state.screen === "results") renderResults(state);
 
@@ -1205,6 +1317,24 @@ function handleClick(event) {
   }
   if (target instanceof HTMLAnchorElement) {
     event.preventDefault();
+  }
+
+  if (target.dataset.challengeId) {
+    try {
+      executionActionError = "";
+      resolveChallenge(target.dataset.challengeId, target.dataset.challengeDecision);
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      executionActionError = error.message;
+      for (const prefix of ["control", "field"]) {
+        const status = document.querySelector(`#${prefix}-challenge-status`);
+        if (status) {
+          status.textContent = error.message;
+          status.dataset.status = "critical";
+        }
+      }
+    }
+    return;
   }
 
   if (target.dataset.resourceAction) {
@@ -1306,8 +1436,6 @@ function handleClick(event) {
     document.querySelector(`[data-strategy-id="${target.dataset.strategyId}"]`)?.focus();
   } else if (target.dataset.roverCategory && target.dataset.roverOption) {
     selectRoverOption(target.dataset.roverCategory, target.dataset.roverOption);
-  } else if (target.dataset.decisionId) {
-    selectChallengeDecision(target.dataset.decisionId);
   } else if (target.dataset.route) {
     navigateTo(target.dataset.route);
   }

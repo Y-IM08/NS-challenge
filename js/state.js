@@ -25,6 +25,8 @@ import {
   executeMissionMaintenance,
   executeMissionTransmission,
   failMissionExecution,
+  getActiveMissionChallenges as getExecutionActiveChallenges,
+  getMissionChallengeHistory as getExecutionChallengeHistory,
   getScientificOperationOptions,
   initializeMissionExecution,
   moveMissionRover,
@@ -32,6 +34,8 @@ import {
   performNextScientificObservation,
   performScientificObservation,
   resumeMissionExecution,
+  resolveMissionChallenge as resolveExecutionChallenge,
+  recoverMissionEquipment as recoverExecutionEquipment,
   selectMissionDestination as selectExecutionDestination,
   updateMissionPowerEnvironment,
 } from "./mission.js";
@@ -464,8 +468,8 @@ export function resetRoverConfiguration() {
 }
 
 function requireMissionControl() {
-  if (state.screen !== "control" || !state.resources) {
-    throw new Error("Mission resource operations are only available in mission control.");
+  if (!["control", "challenge"].includes(state.screen) || !state.resources) {
+    throw new Error("Mission resource operations are only available in mission control or the linked challenge center.");
   }
   if (!state.missionExecution) {
     throw new Error("Mission execution is not initialized.");
@@ -587,6 +591,37 @@ export function selectPowerEnvironment(environmentId) {
     state.resources,
     state.rover,
     environmentId,
+  ));
+}
+
+export function getActiveChallenges() {
+  requireMissionControl();
+  return Object.freeze(getExecutionActiveChallenges(state.missionExecution));
+}
+
+export function getChallengeHistory() {
+  requireMissionControl();
+  return Object.freeze(getExecutionChallengeHistory(state.missionExecution));
+}
+
+export function resolveChallenge(challengeId, decisionId) {
+  requireMissionControl();
+  return publishMissionOperation(resolveExecutionChallenge(
+    state.missionExecution,
+    state.resources,
+    state.rover,
+    challengeId,
+    decisionId,
+  ));
+}
+
+export function recoverEquipment(subsystem) {
+  requireMissionControl();
+  return publishMissionOperation(recoverExecutionEquipment(
+    state.missionExecution,
+    state.resources,
+    state.rover,
+    subsystem,
   ));
 }
 

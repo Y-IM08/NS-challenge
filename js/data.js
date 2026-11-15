@@ -276,6 +276,143 @@ export const MISSION_EXECUTION_CONFIG = Object.freeze({
   requireTransmittedData: true,
 });
 
+export const MISSION_CHALLENGE_CONFIG = Object.freeze({
+  evaluation: Object.freeze({
+    startingScore: 100,
+    timePenaltyPerHour: 2,
+    budgetPenaltyPer100Credits: 1,
+    equipmentFailurePenalty: 10,
+    recoveryBonus: 5,
+    resolutionBonus: 3,
+  }),
+  challenges: Object.freeze([
+    Object.freeze({
+      id: "dust-storm",
+      title: "Dust storm",
+      severity: "HIGH",
+      category: "environmental",
+      description: "A deterministic dust front reduces solar availability. Choose how the rover responds.",
+      trigger: Object.freeze({ elapsedHours: 1, solarPowerRequired: true }),
+      decisions: Object.freeze([
+        Object.freeze({
+          id: "enter-safe-mode",
+          title: "Enter safe mode",
+          detail: "Protect the rover and wait for a clearer operating window.",
+          effects: Object.freeze({ durationHours: 0.5, batteryDeltaWh: -20, environmentalPowerFactor: 0.8, budgetCostCredits: 20, operatingMode: "safe mode" }),
+        }),
+        Object.freeze({
+          id: "continue-operations",
+          title: "Continue operations",
+          detail: "Preserve the schedule but accept a larger battery draw and reduced solar generation.",
+          effects: Object.freeze({ durationHours: 0.25, batteryDeltaWh: -90, environmentalPowerFactor: 0.55, budgetCostCredits: 0, operatingMode: "nominal" }),
+        }),
+        Object.freeze({
+          id: "wait-for-conditions",
+          title: "Wait for conditions to improve",
+          detail: "Spend more mission time while allowing solar availability to recover.",
+          effects: Object.freeze({ durationHours: 2, batteryDeltaWh: -10, environmentalPowerFactor: 0.95, budgetCostCredits: 10, operatingMode: "standby" }),
+        }),
+      ]),
+    }),
+    Object.freeze({
+      id: "reduced-solar",
+      title: "Reduced solar generation",
+      severity: "MODERATE",
+      category: "environmental",
+      description: "Dust accumulation or the selected traverse location has lowered the rover's available solar generation.",
+      trigger: Object.freeze({ locations: Object.freeze(["jezero-ridge", "elysium-plain", "arcadia-outcrop"]), elapsedHours: 5, solarPowerRequired: true }),
+      decisions: Object.freeze([
+        Object.freeze({
+          id: "curtail-load",
+          title: "Curtail nonessential load",
+          detail: "Use a short low-load interval and preserve more of the available generation.",
+          effects: Object.freeze({ durationHours: 0.5, batteryDeltaWh: -10, environmentalPowerFactor: 0.8, budgetCostCredits: 8, operatingMode: "reduced load" }),
+        }),
+        Object.freeze({
+          id: "wait-for-daylight",
+          title: "Wait for better solar conditions",
+          detail: "Spend time in standby; generation remains constrained until conditions change.",
+          effects: Object.freeze({ durationHours: 2, batteryDeltaWh: -25, environmentalPowerFactor: 0.65, budgetCostCredits: 5, operatingMode: "standby" }),
+        }),
+      ]),
+    }),
+    Object.freeze({
+      id: "extreme-temperature",
+      title: "Extreme temperature",
+      severity: "HIGH",
+      category: "environmental",
+      description: "The deterministic environment/resource trigger indicates a temperature stress period for surface systems.",
+      trigger: Object.freeze({ locations: Object.freeze(["arcadia-ice"]), batteryFractionAtMost: 0.45 }),
+      decisions: Object.freeze([
+        Object.freeze({
+          id: "protect-systems",
+          title: "Protect critical systems",
+          detail: "Pause nonessential work and spend resources on thermal protection.",
+          effects: Object.freeze({ durationHours: 1, batteryDeltaWh: -30, environmentalPowerFactor: 0.9, budgetCostCredits: 45, operatingMode: "thermal protection" }),
+        }),
+        Object.freeze({
+          id: "continue-in-temperature",
+          title: "Continue operations",
+          detail: "Save the protection cost but accept a larger battery penalty.",
+          effects: Object.freeze({ durationHours: 0.25, batteryDeltaWh: -75, environmentalPowerFactor: 0.75, budgetCostCredits: 0, operatingMode: "nominal" }),
+        }),
+      ]),
+    }),
+    Object.freeze({
+      id: "wheel-malfunction",
+      title: "Wheel malfunction",
+      severity: "HIGH",
+      category: "equipment",
+      subsystem: "wheels",
+      description: "A deterministic movement-count trigger detected a wheel system fault. Rover movement is blocked until recovery.",
+      trigger: Object.freeze({ movements: 1 }),
+      recovery: Object.freeze({ durationHours: 1, batteryDeltaWh: -10, budgetCostCredits: 60 }),
+      decisions: Object.freeze([
+        Object.freeze({ id: "recover-equipment", title: "Recover wheel system", detail: "Perform the configured field repair to restore rover movement.", effects: Object.freeze({ durationHours: 1, batteryDeltaWh: -10, budgetCostCredits: 60 }) }),
+      ]),
+    }),
+    Object.freeze({
+      id: "instrument-malfunction",
+      title: "Instrument malfunction",
+      severity: "MODERATE",
+      category: "equipment",
+      subsystem: "instrument",
+      description: "A deterministic observation-count trigger detected an instrument fault. The affected instrument cannot collect data until recovered.",
+      trigger: Object.freeze({ observations: 2 }),
+      recovery: Object.freeze({ durationHours: 1.5, batteryDeltaWh: -15, budgetCostCredits: 90 }),
+      decisions: Object.freeze([
+        Object.freeze({ id: "recover-equipment", title: "Recover affected instrument", detail: "Perform the configured field repair and restore its science capability.", effects: Object.freeze({ durationHours: 1.5, batteryDeltaWh: -15, budgetCostCredits: 90 }) }),
+      ]),
+    }),
+    Object.freeze({
+      id: "communication-failure",
+      title: "Communication failure",
+      severity: "HIGH",
+      category: "equipment",
+      subsystem: "communications",
+      description: "A deterministic transmission trigger detected a communication system fault. Further transmissions require recovery.",
+      trigger: Object.freeze({ successfulTransmissions: 1 }),
+      recovery: Object.freeze({ durationHours: 1, batteryDeltaWh: -10, budgetCostCredits: 80 }),
+      decisions: Object.freeze([
+        Object.freeze({ id: "recover-equipment", title: "Recover communication system", detail: "Repair the link before the next transmission attempt.", effects: Object.freeze({ durationHours: 1, batteryDeltaWh: -10, budgetCostCredits: 80 }) }),
+      ]),
+    }),
+    Object.freeze({
+      id: "power-generation-degradation",
+      title: "Power generation degradation",
+      severity: "MODERATE",
+      category: "equipment",
+      subsystem: "power",
+      description: "A deterministic elapsed-time trigger detected degraded power generation. Available output is reduced until recovery.",
+      trigger: Object.freeze({ elapsedHours: 6, solarPowerRequired: true }),
+      recovery: Object.freeze({ durationHours: 1.5, batteryDeltaWh: -20, budgetCostCredits: 110 }),
+      decisions: Object.freeze([
+        Object.freeze({ id: "recover-equipment", title: "Recover power generation", detail: "Perform the configured maintenance to restore generation output.", effects: Object.freeze({ durationHours: 1.5, batteryDeltaWh: -20, budgetCostCredits: 110 }) }),
+      ]),
+    }),
+  ]),
+});
+
 export const MISSION_SURFACE_WAYPOINTS = Object.freeze([
   Object.freeze({
     id: "jezero-landing",
@@ -499,8 +636,8 @@ export const HOW_TO_STEPS = Object.freeze([
   "Assign the available mission roles to up to four local player slots.",
   "Configure mission duration, landing context, scientific priorities, resource estimates, and operational strategy.",
   "Configure rover components and review live engineering constraints in the design studio.",
-  "Run deterministic resource operations in mission control, then review the challenge and scientist previews.",
-  "Review the results screen. No mission outcome is simulated yet.",
+  "Run deterministic resource operations and respond to environmental and equipment challenges in mission control.",
+  "Review mission resources, challenge outcomes, and the scientist briefing.",
 ]);
 
 export const INITIAL_GAME_STATE = Object.freeze({

@@ -4718,6 +4718,187 @@
   }
 }
 
+.mission-challenges {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 13px;
+  padding: 14px;
+}
+
+.challenge-runtime-list,
+.challenge-runtime-decisions,
+.challenge-history-list,
+.equipment-condition-list,
+.challenge-performance {
+  display: grid;
+  gap: 8px;
+}
+
+.challenge-runtime-card {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid rgba(242, 118, 76, 0.32);
+  border-left: 3px solid var(--mars-300);
+  border-radius: 4px;
+  background: rgba(242, 118, 76, 0.045);
+}
+
+.challenge-runtime-card[data-severity="high"] {
+  border-left-color: var(--signal-amber);
+}
+
+.challenge-runtime-card__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.challenge-runtime-card__heading .eyebrow {
+  margin: 0;
+  color: var(--signal-amber);
+}
+
+.challenge-runtime-card__heading strong {
+  color: var(--ink-100);
+  font-size: 13px;
+}
+
+.challenge-runtime-card > p {
+  margin: 0;
+  color: var(--ink-300);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.challenge-runtime-card__context,
+.challenge-runtime-decision > small {
+  color: var(--ink-500);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.challenge-runtime-decisions {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin-top: 2px;
+}
+
+.challenge-runtime-decision {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: rgba(7, 14, 23, 0.42);
+}
+
+.challenge-runtime-decision > strong {
+  color: var(--ink-200);
+  font-size: 10px;
+}
+
+.challenge-runtime-decision__preview {
+  color: var(--signal-amber) !important;
+}
+
+.challenge-runtime-decision > .button {
+  justify-self: start;
+  margin-top: 3px;
+}
+
+.challenge-runtime-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.challenge-runtime-summary h2,
+.challenge-runtime-summary h3 {
+  margin: 0 0 8px;
+  color: var(--ink-300);
+  font-size: 10px;
+  font-weight: 550;
+}
+
+.equipment-condition,
+.challenge-performance__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 9px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.equipment-condition span,
+.challenge-performance__item span {
+  color: var(--ink-500);
+  font-size: 9px;
+}
+
+.equipment-condition strong,
+.challenge-performance__item strong {
+  color: var(--ink-200);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  text-align: right;
+}
+
+.challenge-runtime-history {
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+
+.challenge-runtime-history summary {
+  color: var(--ink-300);
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.challenge-history-list {
+  margin-top: 9px;
+}
+
+.challenge-history-entry {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.7fr) minmax(120px, 1fr) minmax(130px, auto);
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.challenge-history-entry strong {
+  color: var(--ink-200);
+  font-size: 9px;
+}
+
+.challenge-history-entry span,
+.challenge-history-entry small {
+  color: var(--ink-500);
+  font-size: 8px;
+}
+
+.challenge-history-entry[data-status="active"] span {
+  color: var(--signal-amber);
+}
+
+@media (max-width: 760px) {
+  .challenge-runtime-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .challenge-history-entry {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}
+
 .resource-dashboard {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

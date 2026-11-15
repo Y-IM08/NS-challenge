@@ -1,4 +1,14 @@
 import {
+  activateMissionChallenge,
+  calculateMissionChallengeEvaluation,
+  createMissionChallenge,
+  findTriggerableMissionChallenges,
+  getActiveMissionChallenges as activeChallengesFromHistory,
+  getMissionChallengeHistory as copyChallengeHistory,
+  getMissionChallengeDefinition,
+  resolveMissionChallenge as resolveChallengeRecord,
+} from "./challenges.js";
+import {
   MISSION_COMPLETION_REQUIREMENTS,
   MISSION_EXECUTION_CONFIG,
   MISSION_RESOURCE_CONFIG,
@@ -10,6 +20,7 @@ import {
   advanceMissionTime,
   collectScientificData,
   createMissionResources,
+  recordChallengeConsequences,
   recordEmergencyDelay,
   recordMissionMovement,
   recordMissionSampleCollection,
@@ -67,6 +78,113 @@ function appendEvent(execution, event) {
     events: [...execution.events, event],
     updatedAt: event.timestamp,
   };
+}
+
+function operationalStatusFor(condition) {
+  const instrumentFailed = Object.values(condition.instruments).includes("failed");
+  return condition.wheels === "failed"
+    || instrumentFailed
+    || condition.communications === "failed"
+    || condition.powerGenerationFactor < 1
+    ? "degraded"
+    : "operational";
+}
+
+function setEquipmentFailure(execution, challenge) {
+  const condition = execution.operationalCondition;
+  const nextCondition = { ...condition };
+  if (challenge.subsystem === "wheels") {
+    nextCondition.wheels = "failed";
+  } else if (challenge.subsystem === "communications") {
+    nextCondition.communications = "failed";
+  } else if (challenge.subsystem === "instrument" && challenge.instrumentId) {
+    nextCondition.instruments = {
+      ...condition.instruments,
+      [challenge.instrumentId]: "failed",
+    };
+  } else if (challenge.subsystem === "power") {
+    nextCondition.powerGenerationFactor = 0.65;
+  }
+  const updated = {
+    ...execution,
+    operationalCondition: nextCondition,
+  };
+  return { ...updated, operationalStatus: operationalStatusFor(nextCondition) };
+}
+
+function triggerChallengesAfterOperation(execution, resources, actionType, roverConfiguration) {
+  const batteryFraction = resources.power.batteryCapacityWh > 0
+    ? resources.power.batteryEnergyWh / resources.power.batteryCapacityWh
+    : 0;
+  const successfulTransmissionCount = execution.events.filter(
+    ({ type, status }) => type === "data-transmitted" && status === "success",
+  ).length;
+  const context = {
+    elapsedHours: resources.time.elapsedHours,
+    batteryFraction,
+    locationId: execution.currentWaypointId,
+    movementCount: execution.movementHistory.length,
+    observationCount: execution.observations.length,
+    successfulTransmissionCount,
+    solarPowered: resources.power.isSolar,
+    instrumentId: execution.observations.at(-1)?.instrumentId,
+    timestamp: new Date(
+      Date.parse(resources.missionStartTime) + resources.time.elapsedHours * 60 * 60 * 1000,
+    ).toISOString(),
+    actionType,
+  };
+  const triggerable = findTriggerableMissionChallenges(execution.challengeHistory, context);
+  let nextExecution = execution;
+  let nextResources = resources;
+  for (const typeId of triggerable) {
+    const challenge = activateMissionChallenge(createMissionChallenge(
+      typeId,
+      context,
+      nextExecution.challengeHistory.length + 1,
+    ));
+    nextExecution = setEquipmentFailure(nextExecution, challenge);
+    if (challenge.subsystem === "power") {
+      nextResources = recordChallengeConsequences(
+        nextResources,
+        roverConfiguration,
+        {
+          challengeId: challenge.challengeId,
+          description: "Power-generation degradation reduced available output by 35%.",
+          equipmentPowerFactor: 0.65,
+        },
+      );
+    }
+    nextExecution = {
+      ...nextExecution,
+      challengeHistory: [...nextExecution.challengeHistory, challenge],
+      challengeEvaluation: calculateMissionChallengeEvaluation([
+        ...nextExecution.challengeHistory,
+        challenge,
+      ]),
+    };
+    nextExecution = appendEvent(nextExecution, createEvent(
+      nextExecution,
+      "challenge-triggered",
+      `${challenge.title} challenge activated.`,
+      {
+        challengeId: challenge.challengeId,
+        challengeTypeId: typeId,
+        actionType,
+        locationId: context.locationId,
+      },
+      nextResources,
+    ));
+  }
+  return { execution: nextExecution, resources: nextResources };
+}
+
+function finishMissionOperation(result, actionType, roverConfiguration) {
+  return triggerChallengesAfterOperation(
+    result.execution,
+    result.resources,
+    actionType,
+    roverConfiguration,
+  );
 }
 
 function objectiveState(configuration, observations = []) {
@@ -232,6 +350,17 @@ export function initializeMissionExecution({
     samples: [],
     sampleHistory: [],
     observations: [],
+    challengeHistory: [],
+    challengeEvaluation: calculateMissionChallengeEvaluation([]),
+    operationalCondition: {
+      wheels: "operational",
+      instruments: Object.fromEntries(
+        (roverConfiguration.instruments ?? []).map((instrumentId) => [instrumentId, "operational"]),
+      ),
+      communications: "operational",
+      powerGenerationFactor: 1,
+      operatingMode: "nominal",
+    },
     objectiveProgress: objectiveState(missionPlan.configuration),
     exploredWaypointIds: [initialWaypoint.id],
     events: [{
@@ -297,6 +426,9 @@ export function getScientificOperationOptions(execution, roverConfiguration, ins
   if (!waypoint || !roverConfiguration?.instruments?.includes(instrumentId)) {
     return [];
   }
+  if (execution.operationalCondition?.instruments?.[instrumentId] === "failed") {
+    return [];
+  }
   return execution.objectiveProgress.flatMap((objective) => {
     if (!objective.selected || !waypoint.objectiveIds.includes(objective.objectiveId)) {
       return [];
@@ -332,8 +464,11 @@ export function performNextScientificObservation(execution, resources, roverConf
 
 export function moveMissionRover(execution, resources, roverConfiguration, destinationId = execution?.selectedDestinationId, settings = MISSION_RESOURCE_CONFIG) {
   requireActive(execution);
-  if (execution.operationalStatus !== "operational") {
+  if (execution.operationalStatus === "failed") {
     throw new Error("Rover is not operational and cannot move.");
+  }
+  if (execution.operationalCondition?.wheels === "failed") {
+    throw new Error("Rover movement is blocked by a wheel malfunction; recover the wheel system first.");
   }
   if (!destinationId) {
     throw new RangeError("Select a destination before moving the rover.");
@@ -365,10 +500,10 @@ export function moveMissionRover(execution, resources, roverConfiguration, desti
       : [...execution.exploredWaypointIds, route.destination.id],
   };
   const event = createEvent(next, "rover-moved", `Rover reached ${route.destination.name}.`, movement, nextResources);
-  return {
+  return finishMissionOperation({
     execution: appendEvent(next, event),
     resources: nextResources,
-  };
+  }, "movement", roverConfiguration);
 }
 
 export function collectMissionSample(execution, resources, roverConfiguration, sampleTypeId, settings = MISSION_RESOURCE_CONFIG) {
@@ -380,6 +515,9 @@ export function collectMissionSample(execution, resources, roverConfiguration, s
   }
   if (!roverConfiguration.instruments?.includes("regolith-sampler")) {
     throw new Error("Sample collection requires an installed regolith sampling system.");
+  }
+  if (execution.operationalCondition?.instruments?.["regolith-sampler"] === "failed") {
+    throw new Error("The regolith sampling system has malfunctioned and must be recovered first.");
   }
   const metrics = calculateRoverMetrics(roverConfiguration, { selectedLandingSiteId: execution.landingSiteId });
   const remainingPayload = Math.min(
@@ -412,10 +550,10 @@ export function collectMissionSample(execution, resources, roverConfiguration, s
     sampleHistory: [...execution.sampleHistory, sample],
     currentActivity: `Collected ${sample.name}`,
   };
-  return {
+  return finishMissionOperation({
     execution: appendEvent(next, createEvent(next, "sample-collected", `${sample.name} collected at ${waypoint.name}.`, sample, nextResources)),
     resources: nextResources,
-  };
+  }, "sample", roverConfiguration);
 }
 
 export function performScientificObservation(
@@ -439,6 +577,9 @@ export function performScientificObservation(
   }
   if (!roverConfiguration.instruments?.includes(instrumentId)) {
     throw new Error(`Instrument is not installed: ${instrumentId}`);
+  }
+  if (execution.operationalCondition?.instruments?.[instrumentId] === "failed") {
+    throw new Error(`Instrument ${instrumentId} has malfunctioned and must be recovered first.`);
   }
   const waypoint = getWaypoint(execution.currentWaypointId);
   if (!waypoint?.activities.includes("science") || !waypoint.objectiveIds.includes(objectiveId)) {
@@ -470,21 +611,24 @@ export function performScientificObservation(
     objectiveProgress: objectiveState(execution.missionPlan.configuration, observations),
     currentActivity: `Observing ${objective.name}`,
   };
-  return {
+  return finishMissionOperation({
     execution: appendEvent(next, createEvent(next, "scientific-observation", `${capability.label} observed with ${instrumentId}.`, observation, nextResources)),
     resources: nextResources,
-  };
+  }, "science", roverConfiguration);
 }
 
 export function executeMissionTransmission(execution, resources, roverConfiguration, settings = MISSION_RESOURCE_CONFIG) {
   requireActive(execution);
+  if (execution.operationalCondition?.communications === "failed") {
+    throw new Error("The communication system has malfunctioned and must be recovered before transmission.");
+  }
   const nextResources = transmitMissionData(resources, roverConfiguration, settings);
   const transmissionEvent = nextResources.events.at(-1);
   const next = {
     ...execution,
     currentActivity: transmissionEvent.status === "success" ? "Transmitted science data" : "Transmission attempt failed",
   };
-  return {
+  return finishMissionOperation({
     execution: appendEvent({
       ...next,
     }, {
@@ -498,47 +642,251 @@ export function executeMissionTransmission(execution, resources, roverConfigurat
       status: transmissionEvent.status,
     }),
     resources: nextResources,
-  };
+  }, transmissionEvent.status === "success" ? "transmission" : "transmission-failed", roverConfiguration);
 }
 
 export function executeMissionIdle(execution, resources, roverConfiguration, durationHours = 1, settings = MISSION_RESOURCE_CONFIG) {
   requireActive(execution);
   const nextResources = advanceMissionTime(resources, roverConfiguration, durationHours, settings);
   const next = { ...execution, currentActivity: "Standby" };
-  return {
+  return finishMissionOperation({
     execution: appendEvent(next, createEvent(next, "mission-idle", `Rover remained in standby for ${durationHours} h.`, { durationHours }, nextResources)),
     resources: nextResources,
-  };
+  }, "idle", roverConfiguration);
 }
 
 export function executeMissionEmergencyDelay(execution, resources, roverConfiguration, durationHours = 1, settings = MISSION_RESOURCE_CONFIG) {
   requireActive(execution);
   const nextResources = recordEmergencyDelay(resources, roverConfiguration, durationHours, settings);
   const next = { ...execution, currentActivity: "Emergency delay" };
-  return {
+  return finishMissionOperation({
     execution: appendEvent(next, createEvent(next, "emergency-delay", `Emergency delay recorded for ${durationHours} h.`, { durationHours }, nextResources)),
     resources: nextResources,
-  };
+  }, "delay", roverConfiguration);
 }
 
 export function executeMissionMaintenance(execution, resources, roverConfiguration, settings = MISSION_RESOURCE_CONFIG) {
   requireActive(execution);
   const nextResources = recordMaintenance(resources, roverConfiguration, settings);
   const next = { ...execution, currentActivity: "Maintenance" };
-  return {
+  return finishMissionOperation({
     execution: appendEvent(next, createEvent(next, "maintenance", "Rover maintenance recorded.", {}, nextResources)),
     resources: nextResources,
-  };
+  }, "maintenance", roverConfiguration);
 }
 
 export function updateMissionPowerEnvironment(execution, resources, roverConfiguration, environmentId, settings = MISSION_RESOURCE_CONFIG) {
   requireActive(execution);
   const nextResources = setPowerEnvironment(resources, roverConfiguration, environmentId, settings);
   const next = { ...execution, currentActivity: "Power environment updated" };
-  return {
+  return finishMissionOperation({
     execution: appendEvent(next, createEvent(next, "power-environment", `Power environment set to ${environmentId}.`, {}, nextResources)),
     resources: nextResources,
+  }, "environment", roverConfiguration);
+}
+
+function challengeResolutionTime(resources) {
+  return new Date(
+    Date.parse(resources.missionStartTime) + resources.time.elapsedHours * 60 * 60 * 1000,
+  ).toISOString();
+}
+
+function challengeResourceCosts(effects, previousResources, nextResources) {
+  return {
+    timeHours: Math.max(0, nextResources.time.elapsedHours - previousResources.time.elapsedHours),
+    batteryWh: Math.max(
+      0,
+      previousResources.power.batteryEnergyWh - nextResources.power.batteryEnergyWh,
+    ),
+    budgetCredits: Math.max(
+      0,
+      previousResources.budget.remainingCredits - nextResources.budget.remainingCredits,
+    ),
   };
+}
+
+function replaceChallenge(execution, resolvedChallenge) {
+  const challengeHistory = execution.challengeHistory.map((challenge) =>
+    challenge.challengeId === resolvedChallenge.challengeId
+      ? resolvedChallenge
+      : challenge,
+  );
+  return {
+    ...execution,
+    challengeHistory,
+    challengeEvaluation: calculateMissionChallengeEvaluation(challengeHistory),
+  };
+}
+
+export function resolveMissionChallenge(
+  execution,
+  resources,
+  roverConfiguration,
+  challengeId,
+  decisionId,
+  settings = MISSION_RESOURCE_CONFIG,
+) {
+  requireActive(execution);
+  const challenge = execution.challengeHistory.find(
+    ({ challengeId: id }) => id === challengeId,
+  );
+  if (!challenge || challenge.status !== "ACTIVE") {
+    throw new Error(`Challenge is not active: ${challengeId}.`);
+  }
+  const decision = challenge.decisions.find(({ id }) => id === decisionId);
+  if (!decision) {
+    throw new RangeError(`Invalid decision for challenge ${challengeId}: ${decisionId}`);
+  }
+  if (challenge.category === "equipment") {
+    if (decisionId !== "recover-equipment") {
+      throw new Error("Equipment-failure challenges must be resolved through equipment recovery.");
+    }
+    return recoverMissionEquipment(
+      execution,
+      resources,
+      roverConfiguration,
+      challenge.subsystem === "instrument"
+        ? `instrument:${challenge.instrumentId}`
+        : challenge.subsystem,
+      settings,
+    );
+  }
+
+  const effects = decision.effects;
+  const nextResources = recordChallengeConsequences(
+    resources,
+    roverConfiguration,
+    {
+      challengeId,
+      description: `${challenge.title}: ${decision.title}.`,
+      durationHours: effects.durationHours,
+      batteryDeltaWh: effects.batteryDeltaWh,
+      environmentalPowerFactor: effects.environmentalPowerFactor,
+      budgetCostCredits: effects.budgetCostCredits,
+      settings,
+    },
+  );
+  const resolvedChallenge = resolveChallengeRecord(challenge, decisionId, {
+    resolvedAt: challengeResolutionTime(nextResources),
+    resourceCosts: challengeResourceCosts(effects, resources, nextResources),
+  });
+  const condition = {
+    ...execution.operationalCondition,
+    operatingMode: effects.operatingMode,
+  };
+  let nextExecution = replaceChallenge({
+    ...execution,
+    operationalCondition: condition,
+    currentActivity: effects.operatingMode,
+  }, resolvedChallenge);
+  nextExecution = appendEvent(nextExecution, createEvent(
+    nextExecution,
+    "challenge-resolved",
+    `${challenge.title} resolved: ${decision.title}.`,
+    {
+      challengeId,
+      decisionId,
+      resourceCosts: challengeResourceCosts(effects, resources, nextResources),
+    },
+    nextResources,
+  ));
+  return finishMissionOperation(
+    { execution: nextExecution, resources: nextResources },
+    "challenge-resolution",
+    roverConfiguration,
+  );
+}
+
+export function recoverMissionEquipment(
+  execution,
+  resources,
+  roverConfiguration,
+  subsystem,
+  settings = MISSION_RESOURCE_CONFIG,
+) {
+  requireActive(execution);
+  if (typeof subsystem !== "string" || subsystem.length === 0) {
+    throw new TypeError("Equipment recovery requires a subsystem identifier.");
+  }
+  if (!["wheels", "communications", "power"].includes(subsystem)
+    && !subsystem.startsWith("instrument:")) {
+    throw new RangeError(`Unknown equipment subsystem: ${subsystem}`);
+  }
+  const isInstrument = subsystem.startsWith("instrument:");
+  const instrumentId = isInstrument ? subsystem.slice("instrument:".length) : null;
+  const failureChallenge = activeChallengesFromHistory(execution.challengeHistory).find(
+    (challenge) => challenge.subsystem === (isInstrument ? "instrument" : subsystem)
+      && (!isInstrument || challenge.instrumentId === instrumentId),
+  );
+  if (!failureChallenge) {
+    throw new Error(`No active equipment failure requires recovery: ${subsystem}.`);
+  }
+  const condition = execution.operationalCondition;
+  const currentlyFailed = isInstrument
+    ? condition.instruments[instrumentId] === "failed"
+    : subsystem === "power"
+      ? condition.powerGenerationFactor < 1
+      : condition[subsystem] === "failed";
+  if (!currentlyFailed) {
+    throw new Error(`Equipment is already operational: ${subsystem}.`);
+  }
+  const recovery = getMissionChallengeDefinition(failureChallenge.typeId).recovery;
+  const decision = failureChallenge.decisions.find(({ id }) => id === "recover-equipment");
+  const nextResources = recordChallengeConsequences(
+    resources,
+    roverConfiguration,
+    {
+      challengeId: failureChallenge.challengeId,
+      description: `${failureChallenge.title}: field recovery completed.`,
+      durationHours: recovery.durationHours,
+      batteryDeltaWh: recovery.batteryDeltaWh,
+      equipmentPowerFactor: subsystem === "power" ? 1 : null,
+      budgetCostCredits: recovery.budgetCostCredits,
+      settings,
+    },
+  );
+  const nextCondition = { ...condition };
+  if (isInstrument) {
+    nextCondition.instruments = { ...condition.instruments, [instrumentId]: "operational" };
+  } else if (subsystem === "power") {
+    nextCondition.powerGenerationFactor = 1;
+  } else {
+    nextCondition[subsystem] = "operational";
+  }
+  const resolvedChallenge = resolveChallengeRecord(failureChallenge, decision.id, {
+    resolvedAt: challengeResolutionTime(nextResources),
+    resourceCosts: challengeResourceCosts(recovery, resources, nextResources),
+  });
+  let nextExecution = replaceChallenge({
+    ...execution,
+    operationalCondition: nextCondition,
+    operationalStatus: operationalStatusFor(nextCondition),
+    currentActivity: `Recovered ${subsystem}`,
+  }, resolvedChallenge);
+  nextExecution = appendEvent(nextExecution, createEvent(
+    nextExecution,
+    "equipment-recovered",
+    `${failureChallenge.title} recovered; ${subsystem} is operational.`,
+    {
+      challengeId: failureChallenge.challengeId,
+      subsystem,
+      resourceCosts: challengeResourceCosts(recovery, resources, nextResources),
+    },
+    nextResources,
+  ));
+  return finishMissionOperation(
+    { execution: nextExecution, resources: nextResources },
+    "equipment-recovery",
+    roverConfiguration,
+  );
+}
+
+export function getActiveMissionChallenges(execution) {
+  return activeChallengesFromHistory(execution?.challengeHistory ?? []);
+}
+
+export function getMissionChallengeHistory(execution) {
+  return copyChallengeHistory(execution?.challengeHistory ?? []);
 }
 
 export function getMissionExecutionProgress(execution, resources) {

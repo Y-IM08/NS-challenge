@@ -1,6 +1,6 @@
 # MARSBOUND: Mission to Settlement
 
-MARSBOUND is an educational Mars mission-design simulator. The browser app provides mission setup, rover design, and deterministic resource-managed surface operations for up to four local player slots. Engineering, movement, sample, and resource parameters are illustrative gameplay values; real rover physics, environmental forecasting, scientific outcomes, and scoring are not simulated.
+MARSBOUND is an educational Mars mission-design simulator. The browser app provides mission setup, rover design, deterministic resource-managed surface operations, and dynamic challenge responses for up to four local player slots. Engineering, movement, environmental, and resource parameters are illustrative gameplay values; real rover physics, environmental forecasting, and scientific outcomes are not simulated. Challenge performance uses a configured gameplay evaluation, not a real mission-success score.
 
 ## Run locally
 
@@ -19,13 +19,13 @@ Open [http://localhost:8000/html/](http://localhost:8000/html/) in a modern brow
 - **Player role selection:** Four role profiles and four assignable slots in the same browser session.
 - **Mission planning:** Editable mission name/profile/duration, conceptual landing-site selection, four selectable and ranked science objectives, resource estimates, operational strategy guidance, deterministic risks, mandatory validation, recommendations, and readiness status.
 - **Rover design studio:** CSS/SVG rover schematic and interactive chassis, mobility, power, instrument, communication, and landing-system configuration.
-- **Mission control:** Mission lifecycle controls; illustrative waypoint navigation; sample inventory; capability-specific science observations; data transmission; idle and maintenance operations; objective progress; and power, budget, data, time, and payload monitors.
-- **Field scenario:** Reusable challenge presentation, selectable discussion prompt, severity, and consequence-preview panel.
+- **Mission control:** Mission lifecycle controls; illustrative waypoint navigation; sample inventory; capability-specific science observations; data transmission; idle and maintenance operations; objective progress; resource monitors; active challenge decisions; equipment condition/recovery; and challenge evaluation/history.
+- **Challenge center:** Mission-linked view of the same active challenges and resolution controls available in Mission Control.
 - **Scientist interaction:** Dr. Chen profile, fixed educational dialogue, and science note.
 - **Mission results:** Outcome, objectives, resources, engineering, and evaluation summary placeholders.
 - Supporting archive, how-to, settings, and credits screens.
 
-Selection controls update local in-memory state. Mission plan and validation snapshots refresh whenever relevant mission inputs, landing site, or rover components change. Rover mass, cost, power, payload, reliability index, terrain-fit indicator, science coverage, and engineering validation update immediately from the selected component catalog. Mission control applies deterministic resource accounting to movement, sample collection, capability-specific observations, transmissions, idle intervals, and maintenance. Challenge responses remain discussion prompts; scientific results and scoring are not simulated.
+Selection controls update local in-memory state. Mission plan and validation snapshots refresh whenever relevant mission inputs, landing site, or rover components change. Rover mass, cost, power, payload, reliability index, terrain-fit indicator, science coverage, and engineering validation update immediately from the selected component catalog. Mission control applies deterministic resource accounting to movement, sample collection, capability-specific observations, transmissions, idle intervals, maintenance, and challenge responses. Challenge consequences update mission time, battery, available solar generation, budget, and equipment condition atomically with the execution snapshot. Scientific results and mission-success scoring are not simulated.
 
 ## Rover engineering model
 
@@ -87,13 +87,24 @@ All component, cost, power, reliability, data, and terrain-fit numbers are illus
 
 The interface offers installed-instrument operation (1 h), stored-data transmission, a 1 h idle interval, and fixed-cost maintenance. There is no emergency spending bypass. All environmental factors, rates, costs, capacities, conversion factors, and the mission epoch are invented gameplay parameters, not measured mission forecasts or NASA specifications. Power and data calculations do not model changing weather, actual battery chemistry, communication windows, compression, transmission loss, sample mass, or instrument science results.
 
+## Dynamic challenges
+
+`js/challenges.js` owns pure challenge creation, activation, deterministic trigger evaluation, decision validation, one-time resolution, history selection, and challenge-performance calculation. Challenge definitions, triggers, decisions, recovery costs, and evaluation weights are configured in `MISSION_CHALLENGE_CONFIG` in `js/data.js`. `mission.js` runs the trigger checks after mission operations; `state.js` publishes challenge, equipment-condition, resource, and event updates together as a frozen snapshot. Both the Mission Control panel and Challenge Center call the same state actions.
+
+- **Environmental events:** A dust storm is eligible after one mission hour for solar-powered rovers. Enter safe mode adds 0.5 h, a 20 Wh direct battery draw, a 20-credit response cost, and sets solar availability to 80% of the current environment's base output. Continuing adds 0.25 h and a 90 Wh draw, costs no response credits, and sets the factor to 55%. Waiting adds 2 h and a 10 Wh draw, costs 10 credits, and sets the factor to 95%. Normal resource accounting also applies to elapsed response time. Reduced solar generation and extreme temperature use deterministic location/time/resource thresholds and expose configured responses with measurable costs.
+- **Equipment events:** Wheel, instrument, communication, and solar-generation failures are triggered by configured movement, observation, transmission, elapsed-time, location, or battery thresholds. Failure state is stored in the separate `operationalCondition` model; rover design selections are never changed. The relevant subsystem is blocked or degraded until a recovery decision charges its configured time, energy, and credits.
+- **Atomicity and lifecycle:** Invalid decisions, duplicate resolutions, insufficient resources/time, paused missions, and terminal missions reject without publishing partial state. Failed/active equipment condition persists until a valid recovery. Challenge events are also recorded in the mission and resource histories.
+- **Evaluation:** Encountered/resolved events, equipment failures/recoveries, and cumulative challenge time, net battery draw, and total budget cost feed the configured 0–100 deterministic challenge-performance indicator. It is an educational game metric only.
+
+Challenge triggers and effects are deterministic gameplay conditions, not predictions of Martian weather or equipment reliability. Solar factors, battery penalties, budgets, recovery procedures, and the evaluation formula are illustrative and do not represent real Mars engineering.
+
 Run the automated calculation and state tests from the project root:
 
 ```sh
 node --experimental-default-type=module --test tests/*.test.js
 ```
 
-Current verification: **73 Node.js built-in tests passed, 0 failed** using the command above. Coverage includes rover engineering, resource accounting, planning readiness, mission initialization, movement and resource costs, sample payload checks, capability-specific observations, mission completion, and immutable state integration. All values and formulas are illustrative gameplay inputs; this is not NASA mission-planning software.
+Current verification: **80 Node.js built-in tests passed, 0 failed** using the command above. Coverage includes rover engineering, resource accounting, planning readiness, mission initialization, movement and resource costs, sample payload checks, capability-specific observations, challenge triggers/decisions/recovery, mission completion, and immutable state integration. All values and formulas are illustrative gameplay inputs; this is not NASA mission-planning software.
 
 ## Navigation
 
@@ -101,7 +112,7 @@ The primary sequence is:
 
 ```text
 Main menu → Mission briefing → Player roles → Mission planning
-→ Rover design → Mission control → Field scenario
+→ Rover design → Mission control → Challenge center
 → Dr. Chen interaction → Mission results
 ```
 
@@ -119,18 +130,19 @@ In-screen Back buttons and `Escape` return to the preceding screen. The persiste
 - `js/planning.js` — pure plan estimates, objective coverage validation, deterministic risk assessment, readiness report, and configuration signature.
 - `js/resources.js` — pure power, budget, data, time, and rover/sample mass accounting plus deterministic operation/event recording.
 - `js/mission.js` — mission initialization, waypoint routes, sample and observation records, objective progress, lifecycle controls, and completion checks.
+- `js/challenges.js` — deterministic trigger rules, challenge lifecycle validation, history helpers, and performance evaluation.
 - `js/ui.js` — reusable DOM renderers, delegated events, and screen navigation.
-- `tests/mission.test.js` and the other `tests/*.test.js` files — Node.js built-in tests for mission execution, engineering, resources, planning, immutable state, risk, readiness, and navigation guards.
-- `PROJECT_CONTEXT.md` — architecture, decisions, current scope, and Phase 5 boundary.
+- `tests/challenges.test.js` and the other `tests/*.test.js` files — Node.js built-in tests for challenges, mission execution, engineering, resources, planning, immutable state, and navigation guards.
+- `PROJECT_CONTEXT.md` — architecture, decisions, current scope, and phase boundaries.
 
 `scientist.js` and `evalauation.js` remain outside this phase. The evaluation filename appears misspelled; resolve it only when that later module is implemented.
 
 ## Current limitations and next phase
 
 - No rover physics, thermal model, weather forecast, actual flight engineering analysis, or scientific measurement outcomes. Waypoint movement and sample types are deterministic illustrative gameplay abstractions.
-- Mission resource operations are deterministic and local; no autonomous event generation, challenge consequences, or scoring is active.
+- Mission resource operations and challenges are deterministic and local; the challenge indicator is a configured educational metric, not mission-success scoring.
 - No dynamic scientist dialogue, result scoring, or mission persistence.
 - Role slots and setup choices are local to the current page session; they are not online multiplayer or saved profiles.
-- The challenge and results screens remain presentation previews; mission control simulates waypoint/resource operations but not science outcomes or mission scoring.
+- Results remain a presentation preview; mission control simulates waypoint/resource operations and challenge consequences, but not science outcomes or mission success.
 
-Future challenge, progressive scientist dialogue, and mission evaluation phases are not included. Preserve the separation between catalogs, centralized state transitions, pure domain calculations, and rendering when extending the simulator.
+Progressive scientist dialogue and full mission-results evaluation are not included. Preserve the separation between catalogs, centralized state transitions, pure domain calculations, and rendering when extending the simulator.
