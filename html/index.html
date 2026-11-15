@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#080d16">
+    <meta
+      name="description"
+      content="MARSBOUND: Mission to Settlement — design a mission for a future on Mars."
+    >
+    <title>MARSBOUND | Mission to Settlement</title>
+    <link rel="stylesheet" href="../css/main.css">
+    <link rel="stylesheet" href="../css/game.css">
+    <script type="module" src="../js/main.js"></script>
+  </head>
+  <body>
+    <div class="loading-screen" id="loading-screen" role="status" aria-live="polite">
+      <div class="loading-screen__content">
+        <div class="brand-mark brand-mark--large" aria-hidden="true">M</div>
+        <p class="eyebrow">MARSBOUND <span class="eyebrow__separator">/</span> MISSION TO SETTLEMENT</p>
+        <h1>Establishing mission control</h1>
+        <p class="loading-screen__message">Loading mission files and interface systems.</p>
+        <div
+          class="loading-progress"
+          role="progressbar"
+          aria-label="Loading mission control"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <span class="loading-progress__value"></span>
+        </div>
+        <button class="button button--quiet loading-screen__skip" type="button" data-action="skip-loading">
+          Skip sequence
+        </button>
+      </div>
+    </div>
+
+    <div class="app-shell" id="app-shell" hidden>
+      <aside class="sidebar" aria-label="MARSBOUND navigation">
+        <a class="brand" href="#home" data-action="return-menu" aria-label="MARSBOUND main menu">
+          <span class="brand-mark" aria-hidden="true">M</span>
+          <span class="brand__text">
+            <strong>MARSBOUND</strong>
+            <span>MISSION TO SETTLEMENT</span>
+          </span>
+        </a>
+
+        <div class="sidebar__section-label">MISSION SEQUENCE</div>
+        <ol class="stage-nav" id="stage-nav" aria-label="Mission stage">
+          <li data-stage="briefing"><span>01</span><span>Briefing</span></li>
+          <li data-stage="roles"><span>02</span><span>Team roles</span></li>
+          <li data-stage="planning"><span>03</span><span>Mission plan</span></li>
+          <li data-stage="rover"><span>04</span><span>Rover design</span></li>
+          <li data-stage="control"><span>05</span><span>Mission control</span></li>
+          <li data-stage="challenge"><span>06</span><span>Field scenario</span></li>
+          <li data-stage="scientist"><span>07</span><span>Science briefing</span></li>
+          <li data-stage="results"><span>08</span><span>Results review</span></li>
+        </ol>
+
+        <div class="sidebar__footer">
+          <div class="connection-indicator">
+            <span class="status-dot status-dot--live" aria-hidden="true"></span>
+            <span>
+              <strong>LOCAL SESSION</strong>
+              <small>NO NETWORK REQUIRED</small>
+            </span>
+          </div>
+          <div class="sidebar__version">MARSBOUND <span>·</span> INTERFACE PREVIEW</div>
+        </div>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <div class="topbar__breadcrumb">
+            <span>FLIGHT OPERATIONS</span>
+            <span aria-hidden="true">/</span>
+            <strong id="page-title">Main menu</strong>
+          </div>
+          <div class="topbar__meta">
+            <span class="mission-clock"><span class="status-dot status-dot--live" aria-hidden="true"></span> LOCAL SIMULATION</span>
+            <span class="topbar__divider" aria-hidden="true"></span>
+            <button class="topbar__menu-button" type="button" data-action="return-menu">MAIN MENU</button>
+          </div>
+        </header>
+
+        <main class="main-content" id="main-content" tabindex="-1">
+          <section class="page-view page-view--menu" data-view="home" aria-labelledby="home-title">
+            <div class="menu-hero">
+              <div class="menu-hero__copy">
+                <p class="eyebrow eyebrow--light">MISSION DESIGN SIMULATOR <span class="eyebrow__separator">/</span> LOCAL SESSION</p>
+                <h1 id="home-title">MARSBOUND</h1>
+                <p class="menu-hero__subtitle">MISSION TO SETTLEMENT</p>
+                <p class="menu-hero__description">
+                  Every future on Mars begins with a better question. Design a rover, plan a field mission,
+                  and explore the science that could make a settlement possible.
+                </p>
+                <div class="menu-hero__actions">
+                  <button class="button button--primary button--large" type="button" data-route="briefing">
+                    Start mission <span aria-hidden="true">→</span>
+                  </button>
+                  <span class="menu-hero__note"><span class="status-dot status-dot--live" aria-hidden="true"></span> SINGLE-DEVICE · UP TO FOUR PLAYERS</span>
+                </div>
+              </div>
+              <div class="planet-system" aria-hidden="true">
+                <span class="planet-system__orbit planet-system__orbit--outer"></span>
+                <span class="planet-system__orbit planet-system__orbit--inner"></span>
+                <span class="planet-system__planet"></span>
+                <span class="planet-system__moon"></span>
+                <span class="planet-system__coordinate">18.4° N<br>77.5° E</span>
+                <span class="planet-system__caption">MARS <small>MISSION DESTINATION</small></span>
+                <span class="planet-system__crosshair planet-system__crosshair--one"></span>
+                <span class="planet-system__crosshair planet-system__crosshair--two"></span>
+              </div>
+              <div class="menu-hero__footer">
+                <span>MISSION WINDOW <strong>OPEN</strong></span>
+                <span>FLIGHT SYSTEM <strong>PREVIEW BUILD</strong></span>
+                <span>DATA LINK <strong>LOCAL</strong></span>
+              </div>
+            </div>
+
+            <div class="menu-section-heading">
+              <div>
+                <p class="eyebrow">MISSION DESK</p>
+                <h2>Choose your next step</h2>
+              </div>
+              <span class="classification">NO ACCOUNT REQUIRED</span>
+            </div>
+            <nav class="menu-grid" aria-label="Main menu">
+              <button class="menu-card menu-card--featured" type="button" data-route="briefing">
+                <span class="menu-card__index">01 <span aria-hidden="true">↗</span></span>
+                <span class="menu-card__title">Mission briefing</span>
+                <span class="menu-card__description">Review the science goals and mission constraints.</span>
+              </button>
+              <button class="menu-card" type="button" data-route="archive">
+                <span class="menu-card__index">02 <span aria-hidden="true">↗</span></span>
+                <span class="menu-card__title">Mission archive</span>
+                <span class="menu-card__description">Browse the available mission profiles.</span>
+              </button>
+              <button class="menu-card" type="button" data-route="how-to">
+                <span class="menu-card__index">03 <span aria-hidden="true">↗</span></span>
+                <span class="menu-card__title">How to play</span>
+                <span class="menu-card__description">Understand the mission sequence and current preview scope.</span>
+              </button>
+              <button class="menu-card" type="button" data-route="settings">
+                <span class="menu-card__index">04 <span aria-hidden="true">↗</span></span>
+                <span class="menu-card__title">Settings</span>
+                <span class="menu-card__description">Adjust display motion for this session.</span>
+              </button>
+              <button class="menu-card" type="button" data-route="credits">
+                <span class="menu-card__index">05 <span aria-hidden="true">↗</span></span>
+                <span class="menu-card__title">Credits</span>
+                <span class="menu-card__description">Project purpose, technology, and attribution.</span>
+              </button>
+            </nav>
+            <p class="menu-disclaimer">Educational simulator prototype. Rover resource accounting is active; surface movement and mission outcomes are not simulated.</p>
+          </section>
+
+          <section class="page-view" data-view="briefing" aria-labelledby="briefing-title" hidden>
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">01 <span class="eyebrow__separator">/</span> FLIGHT DIRECTOR'S BRIEF</p>
+                <h1 id="briefing-title">Mission briefing</h1>
+                <p class="page-heading__description">The science that informs a lasting human presence begins with careful exploration.</p>
+              </div>
+              <span class="mission-status"><span class="status-dot status-dot--warning" aria-hidden="true"></span> PRE-MISSION REVIEW</span>
+            </div>
+
+            <div class="briefing-layout briefing-layout--expanded">
+              <article class="panel briefing-panel">
+                <div class="panel__topline">
+                  <span class="eyebrow">OPERATION <span id="briefing-code">—</span></span>
+                  <span class="classification">MISSION PROFILE</span>
+                </div>
+                <div class="briefing-panel__body">
+                  <p class="eyebrow eyebrow--orange" id="briefing-region">MISSION REGION</p>
+                  <h2 id="briefing-mission-title">Select a mission profile</h2>
+                  <p class="briefing-panel__summary" id="briefing-summary"></p>
+                  <div class="briefing-facts">
+                    <div><span>MISSION WINDOW</span><strong id="briefing-duration">—</strong></div>
+                    <div><span>RISK ASSESSMENT</span><strong id="briefing-risk">—</strong></div>
+                    <div><span>PRIMARY OBJECTIVE</span><strong id="briefing-objective">—</strong></div>
+                  </div>
+                  <section class="settlement-rationale" aria-labelledby="settlement-title">
+                    <p class="eyebrow">WHY EXPLORE?</p>
+                    <h3 id="settlement-title">Settlement begins with evidence.</h3>
+                    <p>Future crews will depend on reliable knowledge of local materials, surface conditions, and environmental risks. Scientific exploration helps mission planners evaluate where people could live, what resources may be useful, and what engineering problems must be solved before arrival.</p>
+                  </section>
+                </div>
+              </article>
+
+              <aside class="panel briefing-aside" aria-labelledby="objectives-title">
+                <div class="panel__header">
+                  <div>
+                    <p class="eyebrow">SCIENCE PROGRAM</p>
+                    <h2 id="objectives-title">Scientific objectives</h2>
+                  </div>
+                  <span class="panel__index">04</span>
+                </div>
+                <ol class="science-objectives" id="science-objectives"></ol>
+              </aside>
+            </div>
+
+            <section class="panel constraints-panel" aria-labelledby="constraints-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">MISSION PARAMETERS</p>
+                  <h2 id="constraints-title">Constraints overview</h2>
+                </div>
+                <span class="classification">PLANNING INPUTS</span>
+              </div>
+              <div class="constraints-grid" id="mission-constraints"></div>
+            </section>
+            <div class="page-actions">
+              <button class="button button--quiet" type="button" data-action="return-menu">Main menu</button>
+              <button class="button button--primary" type="button" data-action="accept-mission">Continue to team roles <span aria-hidden="true">→</span></button>
+            </div>
+          </section>
+
+          <section class="page-view" data-view="roles" aria-labelledby="roles-title" hidden>
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">02 <span class="eyebrow__separator">/</span> CREW ASSIGNMENT</p>
+                <h1 id="roles-title">Build your mission team</h1>
+                <p class="page-heading__description">Assign responsibilities across four local player slots. One device, one shared session.</p>
+              </div>
+              <span class="mission-status"><span class="status-dot status-dot--live" aria-hidden="true"></span> LOCAL CREW</span>
+            </div>
+
+            <section class="panel slot-panel" aria-labelledby="slots-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">SHARED LOCAL SESSION</p>
+                  <h2 id="slots-title">Player slots</h2>
+                </div>
+                <span class="panel__index">MAX 04</span>
+              </div>
+              <div class="player-slots" id="player-slots" role="group" aria-label="Choose a player slot"></div>
+            </section>
+
+            <div class="section-heading section-heading--compact">
+              <div>
+                <p class="eyebrow">AVAILABLE SPECIALTIES</p>
+                <h2>Select a responsibility for the active slot</h2>
+              </div>
+              <span class="active-slot-label" id="active-slot-label">PLAYER 01</span>
+            </div>
+            <div class="role-grid" id="role-grid"></div>
+            <p class="inline-status" id="roles-status" aria-live="polite">Assign at least one role to continue. Slots may remain unassigned.</p>
+            <div class="page-actions">
+              <button class="button button--secondary" type="button" data-action="back">← Back to briefing</button>
+              <button class="button button--primary" id="continue-to-planning" type="button" data-route="planning">Continue to mission planning <span aria-hidden="true">→</span></button>
+            </div>
+          </section>
+
+          <section class="page-view" data-view="planning" aria-labelledby="planning-title" hidden>
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">03 <span class="eyebrow__separator">/</span> MISSION DEFINITION</p>
+                <h1 id="planning-title">Mission planning</h1>
+                <p class="page-heading__description">Set an exploration context before moving into vehicle design.</p>
+              </div>
+              <span class="mission-status"><span class="status-dot status-dot--warning" aria-hidden="true"></span> PLAN IN PROGRESS</span>
+            </div>
+
+            <div class="planning-summary panel">
+              <div class="planning-summary__mission">
+                <p class="eyebrow" id="planning-code">SELECTED OPERATION</p>
+                <h2 id="planning-mission-title">—</h2>
+                <p id="planning-mission-summary"></p>
+              </div>
+              <div class="planning-summary__facts">
+                <span>MISSION DURATION<strong id="planning-duration">—</strong></span>
+                <span>PRIMARY OBJECTIVE<strong id="planning-objective">—</strong></span>
+              </div>
+            </div>
+
+            <div class="planning-layout">
+              <section class="panel site-panel" aria-labelledby="landing-title">
+                <div class="panel__header">
+                  <div>
+                    <p class="eyebrow">SURFACE OPERATIONS</p>
+                    <h2 id="landing-title">Landing-site concept</h2>
+                  </div>
+                  <span class="classification">SELECT ONE</span>
+                </div>
+                <div class="site-grid" id="landing-sites" role="group" aria-label="Select a conceptual landing site"></div>
+                <p class="panel-footnote">Site descriptions are educational planning context, not a safety assessment or simulated terrain model.</p>
+              </section>
+
+              <aside class="panel planning-aside" aria-labelledby="plan-checklist-title">
+                <div class="panel__header">
+                  <div>
+                    <p class="eyebrow">PREFLIGHT WORKSHEET</p>
+                    <h2 id="plan-checklist-title">Planning checklist</h2>
+                  </div>
+                  <span class="panel__index">01—04</span>
+                </div>
+                <ol class="checklist">
+                  <li><span>01</span><span><strong>Confirm science priorities</strong><small>Mission objectives reviewed</small></span><i>READY</i></li>
+                  <li><span>02</span><span><strong>Choose a landing context</strong><small id="checklist-site">Jezero Crater selected</small></span><i id="checklist-site-status">READY</i></li>
+                  <li><span>03</span><span><strong>Design the rover concept</strong><small>Equipment trade-offs to review</small></span><i>PENDING</i></li>
+                  <li><span>04</span><span><strong>Review mission constraints</strong><small>Pending rover mass, cost & power validation</small></span><i>PENDING</i></li>
+                </ol>
+                <div class="resource-allocation">
+                  <p class="eyebrow">AVAILABLE RESOURCES</p>
+                  <div><span>Power</span><strong>Allocation not modeled</strong></div>
+                  <div><span>Supplies</span><strong>Allocation not modeled</strong></div>
+                  <div><span>Budget & mass</span><strong>Validated in design studio</strong></div>
+                </div>
+              </aside>
+            </div>
+            <div class="page-actions">
+              <button class="button button--secondary" type="button" data-action="back">← Back to team roles</button>
+              <button class="button button--primary" type="button" data-route="rover">Continue to rover design <span aria-hidden="true">→</span></button>
+            </div>
+          </section>
+
+          <section class="page-view" data-view="rover" aria-labelledby="rover-title" hidden>
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">04 <span class="eyebrow__separator">/</span> VEHICLE CONCEPT</p>
+                <h1 id="rover-title">Rover design studio</h1>
+                <p class="page-heading__description">Configure a rover against documented illustrative limits. Engineering values update with each selection.</p>
+              </div>
+              <span class="mission-status" id="rover-validity-badge"><span class="status-dot status-dot--warning" aria-hidden="true"></span> CONFIGURATION INCOMPLETE</span>
+            </div>
+
+            <div class="rover-studio">
+              <section class="rover-preview panel" aria-labelledby="rover-preview-title">
+                <div class="panel__header">
+                  <div>
+                    <p class="eyebrow">CONCEPT VISUALIZATION</p>
+                    <h2 id="rover-preview-title">Surface exploration vehicle</h2>
+                  </div>
+                  <span class="panel__index">SCHEMATIC</span>
+                </div>
+                <div class="rover-blueprint">
+                  <div class="blueprint-grid" aria-hidden="true"></div>
+                  <svg class="rover-illustration" viewBox="0 0 520 260" role="img" aria-labelledby="rover-svg-title rover-svg-desc">
+                    <title id="rover-svg-title">Concept rover schematic</title>
+                    <desc id="rover-svg-desc">A line illustration of a six-wheel planetary rover with a mast, solar panel, and instrument deck.</desc>
+                    <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                      <path class="rover-line rover-line--primary" d="M92 165h338l-27 21H118z"/>
+                      <path class="rover-line rover-line--primary" d="M142 165l22-55h171l47 55"/>
+                      <path class="rover-line rover-line--secondary" d="M164 110l-24-28h95l28 28m-93-28v28m58-28v28"/>
+                      <path class="rover-line rover-line--secondary" d="M274 110V65h38v45m-19-45V40"/>
+                      <circle class="rover-line rover-line--secondary" cx="293" cy="31" r="13"/>
+                      <path class="rover-line rover-line--accent" d="M212 140h76m-59-14h44m51 24h24"/>
+                      <path class="rover-line rover-line--primary" d="M129 185l-18 25m75-25 8 25m158-25-9 25m77-25 19 25"/>
+                      <circle class="rover-wheel" cx="106" cy="218" r="18"/><circle class="rover-wheel" cx="194" cy="218" r="18"/>
+                      <circle class="rover-wheel" cx="350" cy="218" r="18"/><circle class="rover-wheel" cx="438" cy="218" r="18"/>
+                      <path class="rover-line rover-line--secondary" d="M88 218h36m-18-18v36m70-18h36m-18-18v36m138-18h36m-18-18v36m70-18h36m-18-18v36"/>
+                      <path class="rover-line rover-line--guide" d="M68 242h414M77 99h48m236-47h76"/>
+                      <path class="rover-line rover-line--guide" d="M73 94v10m288-10v10M433 47v10m-5-5h10"/>
+                    </g>
+                  </svg>
+                  <span class="blueprint-label blueprint-label--mast">REMOTE SENSING MAST</span>
+                  <span class="blueprint-label blueprint-label--deck">INSTRUMENT DECK</span>
+                  <span class="blueprint-label blueprint-label--drive">MOBILITY SYSTEM</span>
+                  <span class="rover-preview__caption">ILLUSTRATIVE ONLY <span>·</span> NOT TO SCALE</span>
+                </div>
+                <div class="rover-metrics" aria-label="Calculated engineering indicators">
+                  <div><span>TOTAL MASS</span><strong id="rover-mass">—</strong></div>
+                  <div><span>CONSTRUCTION COST</span><strong id="rover-cost">—</strong></div>
+                  <div><span>POWER GENERATION</span><strong id="rover-generation">—</strong></div>
+                  <div><span>POWER CONSUMPTION</span><strong id="rover-consumption">—</strong></div>
+                  <div><span>POWER MARGIN</span><strong id="rover-margin">—</strong></div>
+                  <div><span>PAYLOAD REMAINING</span><strong id="rover-payload">—</strong></div>
+                  <div><span>COMPONENT RELIABILITY INDEX</span><strong id="rover-reliability">—</strong></div>
+                </div>
+              </section>
+              <section class="panel rover-config" aria-labelledby="configuration-title">
+                <div class="panel__header">
+                  <div>
+                    <p class="eyebrow">SYSTEMS CONFIGURATION</p>
+                    <h2 id="configuration-title">Select component concepts</h2>
+                  </div>
+                  <button class="button button--quiet rover-reset" type="button" data-action="reset-rover">Reset configuration</button>
+                </div>
+                <div class="rover-categories" id="rover-categories"></div>
+                <p class="panel-footnote">All catalog values are illustrative gameplay values, not verified NASA specifications. Power output is nominal; environmental variability is not simulated.</p>
+              </section>
+            </div>
+            <section class="panel rover-analysis" aria-labelledby="rover-analysis-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">ENGINEERING REVIEW</p>
+                  <h2 id="rover-analysis-title">Constraints & design feedback</h2>
+                </div>
+                <span class="classification">LIVE CONFIGURATION</span>
+              </div>
+              <div class="rover-review-metrics">
+                <div><span>EQUIPMENT SLOTS</span><strong id="rover-equipment-slots">—</strong></div>
+                <div><span>INSTRUMENT SLOTS</span><strong id="rover-instrument-slots">—</strong></div>
+                <div><span>DATA / OPERATION</span><strong id="rover-data-generation">—</strong></div>
+                <div><span>LINK CAPACITY</span><strong id="rover-data-capacity">—</strong></div>
+                <div><span>COMMUNICATION LEVEL</span><strong id="rover-communication">—</strong></div>
+                <div><span>ENVIRONMENTAL SUITABILITY</span><strong id="rover-environment">—</strong></div>
+                <div><span>MASS HEADROOM</span><strong id="rover-mass-headroom">—</strong></div>
+                <div><span>BUDGET REMAINING</span><strong id="rover-budget-remaining">—</strong></div>
+              </div>
+              <div class="rover-review-columns">
+                <section class="rover-validation" aria-labelledby="validation-title">
+                  <h3 id="validation-title">Mandatory constraints</h3>
+                  <ul id="rover-errors" aria-live="polite"></ul>
+                  <h3>Optimization warnings</h3>
+                  <ul id="rover-warnings" aria-live="polite"></ul>
+                </section>
+                <section class="rover-capabilities" aria-labelledby="capabilities-title">
+                  <h3 id="capabilities-title">Scientific objective coverage</h3>
+                  <div id="rover-capabilities"></div>
+                  <p class="agriculture-caution">Agricultural viability is not confirmed by these instruments. It requires combined assessment of regolith chemistry, nutrient-related indicators, potential water indicators, and environmental conditions, with further investigation beyond this rover configuration.</p>
+                </section>
+              </div>
+              <section class="rover-role-guidance" aria-labelledby="rover-role-guidance-title">
+                <h3 id="rover-role-guidance-title">Team responsibilities</h3>
+                <p>Role assignments provide guidance only; they do not alter engineering values or calculations.</p>
+                <div id="rover-role-guidance"></div>
+              </section>
+              <section class="rover-lessons" aria-labelledby="rover-lessons-title">
+                <h3 id="rover-lessons-title">Engineering decision notes</h3>
+                <div class="rover-lessons__grid">
+                  <article><h4>Mass and payload</h4><p>Every installed system adds mass. Payload and mission limits can force trade-offs between instruments and the vehicle structure.</p></article>
+                  <article><h4>Power reserve</h4><p>Systems draw from a finite nominal supply. A positive margin preserves headroom, but this model does not simulate changing sunlight or timed operations.</p></article>
+                  <article><h4>Data return</h4><p>Science observations need a path back to mission control. Compare instrument data load with link capacity; relay windows and scheduling are not modeled.</p></article>
+                  <article><h4>Cost and evidence</h4><p>A higher-cost instrument may add a distinct capability. Compare its science contribution and resource trade-offs; price alone does not guarantee mission success.</p></article>
+                  <article><h4>Capability is not outcome</h4><p>A build can meet engineering limits and still fail to support a mission if its capabilities do not fit the site or objectives. Field operations and outcomes are not simulated here.</p></article>
+                </div>
+              </section>
+            </section>
+            <div class="page-actions">
+              <button class="button button--secondary" type="button" data-action="back">← Back to mission plan</button>
+              <button class="button button--primary" id="continue-to-control" type="button" data-route="control">Open mission control preview <span aria-hidden="true">→</span></button>
+            </div>
+          </section>
+
+          <section class="page-view" data-view="control" aria-labelledby="control-title" hidden>
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">05 <span class="eyebrow__separator">/</span> SURFACE OPERATIONS</p>
+                <h1 id="control-title">Mission control</h1>
+                <p class="page-heading__description">Run deterministic rover operations and monitor mission resources. Surface movement and mission outcomes remain outside this phase.</p>
+              </div>
+              <span class="mission-status" id="mission-resource-status"><span class="status-dot status-dot--live" aria-hidden="true"></span> RESOURCE SIMULATION ACTIVE</span>
+            </div>
+
+            <div class="control-status-grid">
+              <article class="telemetry-card"><span>MISSION CLOCK</span><strong id="mission-clock-value">—</strong><small id="mission-time-remaining">— remaining</small></article>
+              <article class="telemetry-card"><span>AVAILABLE POWER</span><strong id="control-power-value">—</strong><small id="control-power-detail">—</small></article>
+              <article class="telemetry-card"><span>BATTERY</span><strong id="control-battery-value">—</strong><small id="control-battery-detail">—</small></article>
+              <article class="telemetry-card"><span>COMMUNICATION LINK</span><strong id="control-link-value">—</strong><small id="control-link-detail">—</small></article>
+            </div>
+
+            <section class="resource-dashboard" aria-label="Mission resource dashboard">
+              <article class="panel resource-card" data-resource-card="power">
+                <div class="resource-card__heading"><h2>Power</h2><span class="resource-status" id="resource-power-status">NORMAL</span></div>
+                <p class="resource-card__value"><strong id="resource-power-generation">—</strong><span>available generation</span></p>
+                <p class="resource-card__value"><strong id="resource-power-demand">—</strong><span>last operation demand</span></p>
+                <p class="resource-card__value"><strong id="resource-battery-energy">—</strong><span>battery energy</span></p>
+                <progress id="resource-battery-progress" max="100" value="0" aria-label="Battery charge percentage"></progress>
+                <small id="resource-power-breakdown">Standby — W · Instrument — W · Rover — W · Communications — W</small>
+                <small id="resource-battery-caption">—</small>
+              </article>
+              <article class="panel resource-card" data-resource-card="budget">
+                <div class="resource-card__heading"><h2>Budget</h2><span class="resource-status" id="resource-budget-status">NORMAL</span></div>
+                <p class="resource-card__value"><strong id="resource-budget-total">—</strong><span>initial budget</span></p>
+                <p class="resource-card__value"><strong id="resource-budget-spent">—</strong><span>spent to date</span></p>
+                <p class="resource-card__value"><strong id="resource-budget-remaining">—</strong><span>remaining</span></p>
+                <small id="resource-budget-breakdown">Construction — · Launch — · Operations — · Maintenance —</small>
+              </article>
+              <article class="panel resource-card" data-resource-card="data">
+                <div class="resource-card__heading"><h2>Data</h2><span class="resource-status" id="resource-data-status">NORMAL</span></div>
+                <p class="resource-card__value"><strong id="resource-data-generated">—</strong><span>generated</span></p>
+                <p class="resource-card__value"><strong id="resource-data-stored">—</strong><span>stored</span></p>
+                <p class="resource-card__value"><strong id="resource-data-transmitted">—</strong><span>transmitted</span></p>
+                <progress id="resource-storage-progress" max="100" value="0" aria-label="Data storage utilization"></progress>
+                <small id="resource-data-caption">—</small>
+              </article>
+              <article class="panel resource-card" data-resource-card="time">
+                <div class="resource-card__heading"><h2>Time</h2><span class="resource-status" id="resource-time-status">NORMAL</span></div>
+                <p class="resource-card__value"><strong id="resource-time-elapsed">—</strong><span>elapsed</span></p>
+                <p class="resource-card__value"><strong id="resource-time-remaining">—</strong><span>remaining</span></p>
+                <small id="resource-time-breakdown">Operations — h · Communication — h · Idle — h</small>
+              </article>
+              <article class="panel resource-card" data-resource-card="mass">
+                <div class="resource-card__heading"><h2>Mass</h2><span class="resource-status" id="resource-mass-status">NORMAL</span></div>
+                <p class="resource-card__value"><strong id="resource-rover-mass">—</strong><span>deployed rover</span></p>
+                <p class="resource-card__value"><strong id="resource-instrument-mass">—</strong><span>installed instruments</span></p>
+                <p class="resource-card__value"><strong id="resource-payload-mass">—</strong><span>sample payload</span></p>
+                <p class="resource-card__value"><strong id="resource-payload-remaining">—</strong><span>payload capacity remaining</span></p>
+              </article>
+            </section>
+
+            <section class="panel resource-operations" aria-labelledby="resource-operations-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">DETERMINISTIC OPERATIONS</p>
+                  <h2 id="resource-operations-title">Operate rover systems</h2>
+                </div>
+                <label class="environment-select" for="power-environment">
+                  POWER ENVIRONMENT
+                  <select id="power-environment" aria-label="Power environment"></select>
+                </label>
+              </div>
+              <p class="resource-education">Instrument operations consume energy and mission time while adding data to finite storage. Transmission also uses time, power, and budget. Prioritize observations and downlink before resources run low.</p>
+              <div id="resource-instrument-controls" class="resource-instrument-controls"></div>
+              <div class="resource-operation-actions">
+                <button class="button button--secondary" type="button" data-resource-action="transmit">Transmit stored data</button>
+                <button class="button button--secondary" type="button" data-resource-action="idle">Advance idle time · 1 h</button>
+                <button class="button button--secondary" type="button" data-resource-action="maintenance">Record maintenance</button>
+                <button class="button button--secondary" type="button" data-resource-action="emergency-delay">Record emergency delay · 1 h</button>
+              </div>
+              <p id="resource-operation-status" class="resource-operation-status" role="status" aria-live="polite"></p>
+              <p class="panel-footnote">All rates, capacities, costs, power conditions, and mission timing are illustrative gameplay parameters, not NASA specifications or operational forecasts.</p>
+            </section>
+
+            <div class="control-layout">
+              <section class="panel surface-panel" aria-labelledby="surface-title">
+                <div class="panel__header">
+                  <div>
+                    <p class="eyebrow">SURFACE OPERATIONS</p>
+                    <h2 id="surface-title">Landing area overview</h2>
+                  </div>
+                  <span class="classification" id="control-site-name">SITE PREVIEW</span>
+                </div>
+                <div class="surface-map" role="img" aria-label="Illustrative Mars surface map without live rover position">
+                  <div class="surface-map__grid" aria-hidden="true"></div>
+                  <div class="surface-map__terrain surface-map__terrain--one" aria-hidden="true"></div>
+                  <div class="surface-map__terrain surface-map__terrain--two" aria-hidden="true"></div>
+                  <div class="surface-map__terrain surface-map__terrain--three" aria-hidden="true"></div>
+                  <div class="surface-map__marker surface-map__marker--site"><span></span><small>PLANNING REGION</small></div>
+                  <div class="surface-map__marker surface-map__marker--rover"><span></span><small>ROVER POSITION · NONE</small></div>
+                  <div class="surface-map__scale">ILLUSTRATIVE MAP <span>·</span> NO NAVIGATION DATA</div>
+                  <div class="surface-map__coordinates" id="control-site-coordinates">—</div>
+                </div>
+                <p class="panel-footnote" id="control-site-terrain">Map is a visual placeholder and does not represent actual surface topography.</p>
+              </section>
+
+              <aside class="control-side">
+                <section class="panel objective-progress" aria-labelledby="progress-title">
+                  <div class="panel__header">
+                    <div>
+                      <p class="eyebrow">SCIENCE PROGRAM</p>
+                      <h2 id="progress-title">Objective status</h2>
+                    </div>
+                    <span class="panel__index">04</span>
+                  </div>
+                  <div class="objective-status-list" id="control-objectives"></div>
+                </section>
+                <section class="panel event-panel" aria-labelledby="event-title">
+                  <div class="panel__header">
+                    <div>
+                      <p class="eyebrow">FLIGHT LOG</p>
+                      <h2 id="event-title">Resource event history</h2>
+                    </div>
+                    <span class="status-dot status-dot--live" aria-label="Mission log active"></span>
+                  </div>
+                  <div id="resource-event-history" aria-live="polite"></div>
+                </section>
+              </aside>
+            </div>
+
+            <section class="panel timeline-panel" aria-labelledby="timeline-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">OPERATION SEQUENCE</p>
+                  <h2 id="timeline-title">Mission timeline</h2>
+                </div>
+                <span class="classification">NOT SCHEDULED</span>
+              </div>
+              <div class="timeline-track" id="mission-timeline"></div>
+            </section>
+            <div class="page-actions">
+              <button class="button button--secondary" type="button" data-action="back">← Back to rover design</button>
+              <button class="button button--primary" type="button" data-route="challenge">Open field scenario preview <span aria-hidden="true">→</span></button>
+            </div>
+          </section>
+
+          <section class="page-view" data-view="challenge" aria-labelledby="challenge-view-title" hidden>
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">06 <span class="eyebrow__separator">/</span> OPERATIONAL DECISION</p>
+                <h1 id="challenge-view-title">Field scenario</h1>
+                <p class="page-heading__description">A reusable challenge presentation layout. This scenario does not affect the mission.</p>
+              </div>
+              <span class="mission-status"><span class="status-dot status-dot--warning" aria-hidden="true"></span> DISCUSSION PREVIEW</span>
+            </div>
+
+            <div class="challenge-layout">
+              <article class="panel challenge-brief">
+                <div class="panel__topline">
+                  <span class="eyebrow" id="challenge-code">FIELD SCENARIO</span>
+                  <span class="severity-indicator"><span class="status-dot status-dot--warning" aria-hidden="true"></span><span id="challenge-severity">ELEVATED</span></span>
+                </div>
+                <div class="challenge-brief__body">
+                  <p class="eyebrow eyebrow--orange">SITUATION REPORT</p>
+                  <h2 id="challenge-title">A dust front approaches</h2>
+                  <p id="challenge-description"></p>
+                  <div class="challenge-situation">
+                    <span class="challenge-situation__icon" aria-hidden="true">!</span>
+                    <div><strong>OPERATIONAL CONTEXT</strong><p>Conditions described here are narrative prompts only; no environmental model is running.</p></div>
+                  </div>
+                </div>
+              </article>
+              <aside class="panel consequence-panel" aria-labelledby="consequence-title">
+                <div class="panel__header">
+                  <div>
+                    <p class="eyebrow">DECISION SUPPORT</p>
+                    <h2 id="consequence-title">Consequence area</h2>
+                  </div>
+                  <span class="panel__index">PREVIEW</span>
+                </div>
+                <div class="consequence-panel__content">
+                  <span class="status-dot status-dot--warning" aria-hidden="true"></span>
+                  <p id="consequence-copy">Select a response to record it as a discussion prompt.</p>
+                  <small id="consequence-notice"></small>
+                </div>
+              </aside>
+            </div>
+            <section class="decision-section" aria-labelledby="decisions-title">
+              <div class="section-heading section-heading--compact">
+                <div>
+                  <p class="eyebrow">AVAILABLE RESPONSES</p>
+                  <h2 id="decisions-title">What should the team discuss?</h2>
+                </div>
+                <span class="classification">NO SIMULATED OUTCOME</span>
+              </div>
+              <div class="decision-grid" id="challenge-decisions" role="group" aria-label="Choose a discussion prompt"></div>
+            </section>
+            <div class="page-actions">
+              <button class="button button--secondary" type="button" data-action="back">← Back to mission control</button>
+              <button class="button button--primary" type="button" data-route="scientist">Continue to Dr. Chen <span aria-hidden="true">→</span></button>
+            </div>
+          </section>
+
+          <section class="page-view" data-view="scientist" aria-labelledby="scientist-title" hidden>
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">07 <span class="eyebrow__separator">/</span> SCIENCE TEAM CHANNEL</p>
+                <h1 id="scientist-title">Scientist interaction</h1>
+                <p class="page-heading__description">An educational dialogue interface preview with the mission science team.</p>
+              </div>
+              <span class="mission-status"><span class="status-dot status-dot--live" aria-hidden="true"></span> LOCAL BRIEFING</span>
+            </div>
+
+            <div class="scientist-layout">
+              <aside class="scientist-profile panel" aria-label="Scientist profile">
+                <div class="scientist-portrait" aria-hidden="true">
+                  <svg viewBox="0 0 160 160" role="img" aria-label="">
+                    <circle cx="80" cy="80" r="71" fill="none" stroke="currentColor" stroke-opacity=".22"/>
+                    <path d="M43 132c4-25 17-38 37-38s33 13 37 38" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+                    <path d="M55 60c0-22 11-35 27-35 17 0 27 13 27 35v14c0 20-12 33-29 33-16 0-25-13-25-33z" fill="#17283a" stroke="currentColor" stroke-width="3"/>
+                    <path d="M55 58c2-20 11-31 28-31 13 0 22 9 25 25-8-4-17-12-20-19-6 10-19 18-33 20z" fill="currentColor" opacity=".72"/>
+                    <path d="M65 70h1m27 0h1m-20 17h12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M35 139h90" stroke="currentColor" stroke-width="2" stroke-opacity=".3"/>
+                  </svg>
+                  <span class="scientist-portrait__monogram">CHEN</span>
+                </div>
+                <p class="eyebrow">SCIENCE TEAM</p>
+                <h2 id="scientist-name">Dr. Chen</h2>
+                <p class="scientist-profile__role" id="scientist-role">Planetary Geologist</p>
+                <span class="scientist-profile__affiliation" id="scientist-affiliation">Mars Surface Science Team</span>
+                <div class="profile-divider"></div>
+                <p class="eyebrow">SPECIALTY</p>
+                <p class="scientist-profile__specialty">Mineralogy · surface processes · field science</p>
+              </aside>
+              <article class="panel dialogue-panel" aria-labelledby="dialogue-title">
+                <div class="panel__header">
+                  <div>
+                    <p class="eyebrow">INCOMING MESSAGE <span class="eyebrow__separator">/</span> LOCAL TRANSCRIPT</p>
+                    <h2 id="dialogue-title">Field science briefing</h2>
+                  </div>
+                  <span class="classification">EDUCATIONAL CONTEXT</span>
+                </div>
+                <div class="dialogue-message">
+                  <span class="dialogue-message__speaker">DR. CHEN <span>· PLANETARY GEOLOGIST</span></span>
+                  <p>“A useful settlement site is more than a place to land. We need to understand the local materials, how the ground behaves, and what the environment will ask of a habitat and its crew.”</p>
+                  <p>“Our observations should help the engineering team ask better questions—not imply that we already know the answers.”</p>
+                </div>
+                <section class="science-note" aria-labelledby="science-note-title">
+                  <p class="eyebrow">SCIENCE NOTE</p>
+                  <h3 id="science-note-title">Why study regolith?</h3>
+                  <p>Martian regolith is the loose material covering bedrock. Its grain size, cohesion, mineral content, and variability can matter to vehicle mobility, landing systems, construction concepts, and future resource studies. These properties must be measured at a site; this interface does not provide measurements.</p>
+                </section>
+                <div class="dialogue-panel__footer">
+                  <span class="inline-status">Dialogue is a fixed educational preview.</span>
+                  <button class="button button--primary" type="button" data-route="results">Continue interaction <span aria-hidden="true">→</span></button>
+                </div>
+              </article>
+            </div>
+            <div class="page-actions">
+              <button class="button button--secondary" type="button" data-action="back">← Back to field scenario</button>
+            </div>
+          </section>
+
+          <section class="page-view" data-view="results" aria-labelledby="results-title" hidden>
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">08 <span class="eyebrow__separator">/</span> MISSION DEBRIEF</p>
+                <h1 id="results-title">Mission results</h1>
+                <p class="page-heading__description">Results interface preview. No mission outcome has been generated or scored.</p>
+              </div>
+              <span class="mission-status"><span class="status-dot status-dot--warning" aria-hidden="true"></span> EVALUATION PENDING</span>
+            </div>
+
+            <section class="results-banner panel">
+              <div class="results-banner__symbol" aria-hidden="true">—</div>
+              <div>
+                <p class="eyebrow">MISSION OUTCOME</p>
+                <h2>Awaiting mission simulation</h2>
+                <p>This build presents the debrief structure only. It does not determine success, failure, or a score.</p>
+              </div>
+              <span class="classification">NOT EVALUATED</span>
+            </section>
+            <div class="results-grid">
+              <section class="panel results-panel" aria-labelledby="results-science-title">
+                <div class="panel__header"><div><p class="eyebrow">SCIENCE PROGRAM</p><h2 id="results-science-title">Objectives achieved</h2></div><span class="panel__index">04</span></div>
+                <div id="results-objectives" class="results-objectives"></div>
+              </section>
+              <section class="panel results-panel" aria-labelledby="resource-summary-title">
+                <div class="panel__header"><div><p class="eyebrow">MISSION INVENTORY</p><h2 id="resource-summary-title">Resource summary</h2></div><span class="panel__index">—</span></div>
+                <div class="summary-list">
+                  <div><span>Power</span><strong>Not simulated</strong></div>
+                  <div><span>Water & oxygen</span><strong>Not simulated</strong></div>
+                  <div><span>Science samples</span><strong>Not recorded</strong></div>
+                </div>
+              </section>
+              <section class="panel results-panel results-panel--wide" aria-labelledby="engineering-title">
+                <div class="panel__header"><div><p class="eyebrow">VEHICLE REVIEW</p><h2 id="engineering-title">Engineering performance</h2></div><span class="panel__index">PREVIEW</span></div>
+                <div class="engineering-summary" id="engineering-summary"></div>
+              </section>
+            </div>
+            <section class="panel evaluation-placeholder" aria-labelledby="evaluation-title">
+              <div class="evaluation-placeholder__mark" aria-hidden="true">E</div>
+              <div><p class="eyebrow">EVALUATION SUMMARY</p><h2 id="evaluation-title">Scoring system planned for a later phase</h2><p>No grades, points, or performance claims are produced by this interface foundation.</p></div>
+            </section>
+            <div class="page-actions">
+              <button class="button button--secondary" type="button" data-route="briefing">Review mission briefing</button>
+              <button class="button button--primary" type="button" data-action="restart">Restart mission <span aria-hidden="true">↻</span></button>
+            </div>
+          </section>
+
+          <section class="page-view" data-view="archive" aria-labelledby="archive-title" hidden>
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">MISSION DESK <span class="eyebrow__separator">/</span> FLIGHT ARCHIVE</p>
+                <h1 id="archive-title">Mission archive</h1>
+                <p class="page-heading__description">Select a profile to review its objectives and mission window.</p>
+              </div>
+              <span class="mission-status"><span class="status-dot status-dot--live" aria-hidden="true"></span> PROFILES AVAILABLE</span>
+            </div>
+            <div class="archive-grid" id="archive-missions"></div>
+            <div class="page-actions">
+              <button class="button button--secondary" type="button" data-action="return-menu">← Back to main menu</button>
+            </div>
+          </section>
+
+          <section class="page-view" data-view="how-to" aria-labelledby="how-to-title" hidden>
+            <div class="page-heading">
+              <div><p class="eyebrow">MISSION DESK <span class="eyebrow__separator">/</span> FIELD GUIDE</p><h1 id="how-to-title">How to play</h1><p class="page-heading__description">Follow the mission sequence. This build focuses on interface and navigation, not simulation.</p></div>
+            </div>
+            <section class="panel guide-panel">
+              <ol class="guide-steps" id="how-to-steps"></ol>
+              <div class="guide-notice"><span class="status-dot status-dot--warning" aria-hidden="true"></span><p>Resource accounting and event logging are active in Mission Control. Rover physics, science outcomes, challenge consequences, scoring, and online multiplayer are not implemented.</p></div>
+            </section>
+            <div class="page-actions"><button class="button button--secondary" type="button" data-action="return-menu">← Back to main menu</button><button class="button button--primary" type="button" data-route="briefing">Start mission <span aria-hidden="true">→</span></button></div>
+          </section>
+
+          <section class="page-view" data-view="settings" aria-labelledby="settings-title" hidden>
+            <div class="page-heading"><div><p class="eyebrow">MISSION DESK <span class="eyebrow__separator">/</span> DISPLAY</p><h1 id="settings-title">Settings</h1><p class="page-heading__description">Accessibility settings for this browser session.</p></div></div>
+            <section class="panel settings-panel" aria-labelledby="display-settings-title">
+              <div class="panel__header"><div><p class="eyebrow">ACCESSIBILITY</p><h2 id="display-settings-title">Display preferences</h2></div><span class="panel__index">01</span></div>
+              <label class="setting-row" for="reduce-motion"><span><strong>Reduce motion</strong><small>Minimize non-essential animation and transitions.</small></span><input id="reduce-motion" type="checkbox" data-preference="reduceMotion"></label>
+              <p class="settings-note">Preference applies until the page is refreshed. The system reduced-motion preference is also respected.</p>
+            </section>
+            <div class="page-actions"><button class="button button--secondary" type="button" data-action="return-menu">← Back to main menu</button></div>
+          </section>
+
+          <section class="page-view" data-view="credits" aria-labelledby="credits-title" hidden>
+            <div class="page-heading"><div><p class="eyebrow">MISSION DESK <span class="eyebrow__separator">/</span> PROJECT NOTES</p><h1 id="credits-title">Credits</h1><p class="page-heading__description">A lightweight educational interface prototype for mission planning.</p></div></div>
+            <section class="panel credits-panel">
+              <p class="eyebrow">MARSBOUND · MISSION TO SETTLEMENT</p>
+              <h2>Built for thoughtful exploration.</h2>
+              <p>This project uses HTML5, CSS3, and native JavaScript ES modules. The interface uses locally drawn CSS and SVG artwork and does not load external fonts, images, libraries, or services.</p>
+              <div class="credits-facts"><div><span>MISSION DATA</span><strong>Local seed catalog</strong></div><div><span>SESSION MODEL</span><strong>Single device · up to four slots</strong></div><div><span>SIMULATION</span><strong>Not active in this phase</strong></div></div>
+            </section>
+            <div class="page-actions"><button class="button button--secondary" type="button" data-action="return-menu">← Back to main menu</button></div>
+          </section>
+        </main>
+
+        <footer class="workspace-footer">
+          <span>LOCAL MISSION LINK <span class="status-dot status-dot--live" aria-hidden="true"></span> ACTIVE</span>
+          <span>SIMULATION <strong>INTERFACE ONLY</strong></span>
+          <span>BUILD <strong>01.00</strong></span>
+        </footer>
+      </div>
+    </div>
+  </body>
+</html>
