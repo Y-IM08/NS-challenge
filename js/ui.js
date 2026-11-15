@@ -44,6 +44,7 @@ import {
   MISSION_PLANNING_LIMITS,
   MISSION_STRATEGIES,
   SCIENCE_CAPABILITY_REQUIREMENTS,
+  MISSION_EXECUTION_CONFIG,
 } from "./data.js";
 import {
   calculateRoverMetrics,
@@ -53,6 +54,21 @@ import {
 import {
   getResourceSummary,
 } from "./resources.js";
+import {
+  getMissionAvailableWaypoints,
+  getMissionExecutionProgress,
+  getMissionWaypoint,
+} from "./mission.js";
+import {
+  abortMission,
+  collectSample,
+  completeMission,
+  getAvailableScientificOperations,
+  moveRoverToDestination,
+  pauseMission,
+  resumeMission,
+  selectMissionDestination,
+} from "./state.js";
 import { validatePlanningInputs } from "./planning.js";
 
 const SCREEN_TITLES = Object.freeze({
@@ -86,6 +102,7 @@ let loadingExitStarted = false;
 let skipLoadingSequence = completeLoading;
 let lastRenderedScreen = null;
 let resourceActionError = "";
+let executionActionError = "";
 
 function makeElement(tagName, className, text) {
   const element = document.createElement(tagName);
@@ -705,11 +722,101 @@ function renderControl(state) {
   if (!state.resources) {
     throw new Error("Mission control requires initialized mission resources.");
   }
+  if (!state.missionExecution) {
+    throw new Error("Mission control requires initialized mission execution state.");
+  }
+  const execution = state.missionExecution;
   const site = LANDING_SITES.find(({ id }) => id === state.selectedLandingSiteId);
   document.querySelector("#control-site-name").textContent = site?.name.toUpperCase() ?? "SITE PREVIEW";
   document.querySelector("#control-site-coordinates").textContent = site?.coordinates ?? "COORDINATES UNAVAILABLE";
   document.querySelector("#control-site-terrain").textContent =
-    `${site?.terrain ?? "No site selected"}. Map is illustrative and does not represent actual surface topography.`;
+    `${site?.terrain ?? "No site selected"}. Waypoint distances and terrain are illustrative gameplay data, not actual topography.`;
+
+  const progress = getMissionExecutionProgress(execution, state.resources);
+  const statusElement = document.querySelector("#execution-status");
+  statusElement.textContent = execution.status;
+  statusElement.dataset.status = execution.status === "ACTIVE"
+    ? "normal"
+    : execution.status === "PAUSED"
+      ? "warning"
+      : execution.status === "COMPLETED"
+        ? "normal"
+        : "critical";
+  document.querySelector("#execution-summary").textContent =
+    `${progress.completedObjectives} / ${progress.totalObjectives} selected objectives complete · ${progress.locationsExplored} locations explored · ${progress.samplesCollected} samples collected · ${progress.observationsRecorded} observations`;
+  document.querySelector("#execution-action-status").textContent =
+    executionActionError || (progress.canComplete
+      ? "All configured completion requirements are met. You may complete the mission."
+      : "Completion requires all selected objectives, the configured exploration count, and transmitted data.");
+  executionActionError = "";
+  document.querySelectorAll("[data-execution-action]").forEach((button) => {
+    const action = button.dataset.executionAction;
+    button.disabled = execution.status !== "ACTIVE"
+      && !(action === "resume" && execution.status === "PAUSED");
+    if (action === "resume") button.disabled = execution.status !== "PAUSED";
+    if (action === "pause") button.disabled = execution.status !== "ACTIVE";
+    if (action === "complete") button.disabled = execution.status !== "ACTIVE" || !progress.canComplete;
+    if (action === "move") button.disabled = execution.status !== "ACTIVE" || !execution.selectedDestinationId;
+  });
+
+  const waypoints = getMissionAvailableWaypoints(execution);
+  const currentWaypoint = getMissionWaypoint(execution.currentWaypointId);
+  document.querySelector("#rover-current-location").textContent = currentWaypoint?.name ?? "Unavailable";
+  document.querySelector("#rover-operational-status").textContent = execution.operationalStatus.toUpperCase();
+  document.querySelector("#rover-current-activity").textContent = execution.currentActivity;
+  document.querySelector("#rover-distance-traveled").textContent = `${execution.distanceTraveledKm.toFixed(2)} km`;
+
+  document.querySelector("#surface-waypoints").replaceChildren(
+    ...waypoints.map((waypoint) => {
+      const marker = makeElement(
+        "button",
+        `surface-map__waypoint${waypoint.id === execution.currentWaypointId ? " surface-map__waypoint--current" : ""}${waypoint.id === execution.selectedDestinationId ? " surface-map__waypoint--selected" : ""}`,
+        waypoint.name,
+      );
+      marker.type = "button";
+      marker.disabled = execution.status !== "ACTIVE" || waypoint.id === execution.currentWaypointId;
+      marker.dataset.waypointId = waypoint.id;
+      marker.style.left = `${waypoint.coordinates.x}%`;
+      marker.style.top = `${waypoint.coordinates.y}%`;
+      marker.setAttribute("aria-label", `${waypoint.name}, ${waypoint.terrain}${waypoint.id === execution.currentWaypointId ? ", current location" : ""}`);
+      marker.title = `${waypoint.name} · ${waypoint.terrain} · ${waypoint.scientificImportance}`;
+      return marker;
+    }),
+  );
+  const routeLine = document.querySelector("#surface-route-line");
+  const selectedWaypoint = execution.selectedDestinationId
+    ? getMissionWaypoint(execution.selectedDestinationId)
+    : null;
+  if (currentWaypoint && selectedWaypoint) {
+    routeLine.setAttribute("x1", String(currentWaypoint.coordinates.x));
+    routeLine.setAttribute("y1", String(currentWaypoint.coordinates.y));
+    routeLine.setAttribute("x2", String(selectedWaypoint.coordinates.x));
+    routeLine.setAttribute("y2", String(selectedWaypoint.coordinates.y));
+    routeLine.hidden = false;
+  } else {
+    routeLine.hidden = true;
+  }
+  const destinationSelect = document.querySelector("#surface-destination");
+  destinationSelect.disabled = execution.status !== "ACTIVE";
+  destinationSelect.replaceChildren(
+    makeElement("option", "", "Select a waypoint"),
+    ...waypoints
+      .filter(({ id }) => id !== execution.currentWaypointId)
+      .map((waypoint) => {
+        const option = makeElement("option", "", `${waypoint.name} · ${waypoint.terrain}`);
+        option.value = waypoint.id;
+        option.selected = waypoint.id === execution.selectedDestinationId;
+        return option;
+      }),
+  );
+  destinationSelect.value = execution.selectedDestinationId ?? "";
+  const routeSummary = document.querySelector("#surface-route-summary");
+  if (execution.routePreview) {
+    routeSummary.textContent =
+      `Route ${execution.routePreview.distanceKm.toFixed(2)} illustrative km · ${execution.routePreview.durationHours.toFixed(2)} h · ${execution.routePreview.movementPowerW} W movement draw · ~${execution.routePreview.estimatedCostCredits.toFixed(2)} cr`;
+  } else {
+    routeSummary.textContent = "Select a waypoint to preview route distance, estimated time, power, and cost.";
+  }
 
   const resources = getResourceSummary(state.resources);
   const formatCredits = (amount) => `${Math.round(amount).toLocaleString()} cr`;
@@ -751,7 +858,7 @@ function renderControl(state) {
   document.querySelector("#resource-battery-progress").value = resources.power.batteryPercentage;
   const loadBreakdown = state.resources.power.lastLoadBreakdownW;
   document.querySelector("#resource-power-breakdown").textContent =
-    `Standby ${loadBreakdown.standbyPowerW.toFixed(1)} W · Rover ${loadBreakdown.roverOperatingPowerW.toFixed(1)} W · Instrument ${loadBreakdown.instrumentPowerW.toFixed(1)} W · Communications ${loadBreakdown.communicationPowerW.toFixed(1)} W · Maintenance ${loadBreakdown.maintenancePowerW.toFixed(1)} W`;
+    `Standby ${loadBreakdown.standbyPowerW.toFixed(1)} W · Rover ${loadBreakdown.roverOperatingPowerW.toFixed(1)} W · Instrument ${loadBreakdown.instrumentPowerW.toFixed(1)} W · Communications ${loadBreakdown.communicationPowerW.toFixed(1)} W · Movement ${loadBreakdown.movementPowerW.toFixed(1)} W · Maintenance ${loadBreakdown.maintenancePowerW.toFixed(1)} W`;
   document.querySelector("#resource-battery-caption").textContent =
     `${resources.power.energyConsumedWh.toFixed(1)} Wh cumulative energy demand`;
   document.querySelector("#resource-budget-total").textContent =
@@ -761,7 +868,7 @@ function renderControl(state) {
   document.querySelector("#resource-budget-remaining").textContent =
     formatCredits(resources.budget.remainingCredits);
   document.querySelector("#resource-budget-breakdown").textContent =
-    `Construction ${formatCredits(resources.budget.constructionCredits)} · Launch ${formatCredits(resources.budget.launchCredits)} · Operations ${formatCredits(resources.budget.operationsCredits)} · Communications ${formatCredits(resources.budget.communicationCredits)} · Maintenance ${formatCredits(resources.budget.maintenanceCredits)}`;
+    `Construction ${formatCredits(resources.budget.constructionCredits)} · Launch ${formatCredits(resources.budget.launchCredits)} · Operations ${formatCredits(resources.budget.operationsCredits)} · Communications ${formatCredits(resources.budget.communicationCredits)} · Maintenance ${formatCredits(resources.budget.maintenanceCredits)} · Samples ${formatCredits(resources.budget.sampleCredits)}`;
   document.querySelector("#resource-data-generated").textContent =
     `${resources.data.generatedMB.toFixed(1)} MB`;
   document.querySelector("#resource-data-stored").textContent =
@@ -779,7 +886,7 @@ function renderControl(state) {
   document.querySelector("#resource-time-remaining").textContent =
     formatHours(resources.time.remainingHours);
   document.querySelector("#resource-time-breakdown").textContent =
-    `Start ${new Date(state.resources.missionStartTime).toISOString()} · Instrument ${formatHours(resources.time.instrumentOperationHours)} · Communication ${formatHours(resources.time.communicationHours)} · Idle ${formatHours(resources.time.idleHours)} · Emergency delay ${formatHours(resources.time.emergencyDelayHours)} · Maintenance ${formatHours(resources.time.maintenanceHours)}`;
+    `Instrument ${formatHours(resources.time.instrumentOperationHours)} · Movement ${formatHours(resources.time.movementHours)} · Samples ${formatHours(resources.time.sampleCollectionHours)} · Communication ${formatHours(resources.time.communicationHours)} · Idle ${formatHours(resources.time.idleHours)} · Maintenance ${formatHours(resources.time.maintenanceHours)}`;
   document.querySelector("#resource-rover-mass").textContent =
     `${resources.mass.totalDeployedMassKg.toFixed(1)} kg`;
   document.querySelector("#resource-instrument-mass").textContent =
@@ -790,6 +897,7 @@ function renderControl(state) {
     `${resources.mass.remainingPayloadCapacityKg.toFixed(1)} kg of ${resources.mass.payloadCapacityKg.toFixed(1)} kg`;
 
   const environmentSelect = document.querySelector("#power-environment");
+  environmentSelect.disabled = execution.status !== "ACTIVE";
   environmentSelect.replaceChildren(
     ...MISSION_RESOURCE_CONFIG.environmentProfiles.map((environment) => {
       const option = makeElement("option", "", environment.label);
@@ -803,19 +911,51 @@ function renderControl(state) {
     .filter(Boolean);
   document.querySelector("#resource-instrument-controls").replaceChildren(
     ...(instrumentOptions.length
-      ? instrumentOptions.map((instrument) => {
-        const button = makeElement(
-          "button",
-          "button button--secondary resource-instrument-button",
-          `Operate ${instrument.name} · 1 h`,
-        );
-        button.type = "button";
-        button.dataset.resourceAction = "instrument";
-        button.dataset.instrumentId = instrument.id;
-        return button;
+      ? instrumentOptions.flatMap((instrument) => {
+        const options = getAvailableScientificOperations(instrument.id);
+        if (!options.length) {
+          return [];
+        }
+        return options.map((operation) => {
+          const button = makeElement(
+            "button",
+            "button button--secondary resource-instrument-button",
+            `${instrument.name} · ${operation.objectiveName}: ${operation.capabilityName}`,
+          );
+          button.type = "button";
+          button.dataset.resourceAction = "instrument";
+          button.dataset.instrumentId = instrument.id;
+          button.dataset.objectiveId = operation.objectiveId;
+          button.dataset.capabilityId = operation.capabilityId;
+          button.disabled = execution.status !== "ACTIVE";
+          return button;
+        });
       })
       : [makeElement("p", "inline-status", "No instruments are installed.")]),
   );
+  const sampleAvailability = document.querySelector("#sample-availability");
+  const availableSampleTypes = currentWaypoint?.sampleTypes ?? [];
+  sampleAvailability.textContent = currentWaypoint
+    ? `At ${currentWaypoint.name}, available sample types are listed below. Collection requires a regolith sampling system.`
+    : "Current waypoint is unavailable.";
+  document.querySelector("#sample-controls").replaceChildren(
+    ...(state.rover.instruments.includes("regolith-sampler")
+      ? MISSION_EXECUTION_CONFIG.sampleTypes
+        .filter(({ id }) => availableSampleTypes.includes(id))
+        .map((sample) => {
+          const button = makeElement("button", "button button--secondary", `Collect ${sample.name} · ${sample.massKg} kg`);
+          button.type = "button";
+          button.dataset.sampleType = sample.id;
+          button.disabled = execution.status !== "ACTIVE";
+          return button;
+        })
+      : [makeElement("p", "inline-status", "Install a regolith sampling system to collect samples.")]),
+  );
+  document.querySelectorAll("[data-resource-action]").forEach((button) => {
+    if (button.dataset.resourceAction !== "instrument") {
+      button.disabled = execution.status !== "ACTIVE";
+    }
+  });
   document.querySelector("#resource-operation-status").textContent =
     resourceActionError || state.resources.lastNotice || "Choose an operation. Unsuccessful transmissions retain stored data and are recorded.";
   resourceActionError = "";
@@ -847,14 +987,60 @@ function renderControl(state) {
 
   const objectives = document.querySelector("#control-objectives");
   objectives.replaceChildren(
-    ...SCIENCE_OBJECTIVES.map((objective) => {
+    ...execution.objectiveProgress.map((objective) => {
       const item = makeElement("div", "objective-status");
       const top = makeElement("div", "objective-status__top");
       top.append(makeElement("strong", "", objective.name));
-      top.append(makeElement("span", "", "NOT STARTED"));
+      top.append(makeElement("span", "", objective.status.replaceAll("-", " ").toUpperCase()));
       item.append(top);
-      item.append(makeElement("div", "objective-status__track", ""));
+      const track = makeElement("div", "objective-status__track");
+      const fill = makeElement("span", "objective-status__fill");
+      fill.style.width = `${objective.progress}%`;
+      track.append(fill);
+      item.append(track);
+      item.append(makeElement("small", "objective-status__detail", `${objective.completedCapabilities} / ${objective.requiredCapabilities.length} capabilities investigated`));
       return item;
+    }),
+  );
+
+  document.querySelector("#mission-progress-count").textContent =
+    `${progress.observationsRecorded} observations · ${progress.locationsExplored} explored`;
+  document.querySelector("#mission-sample-inventory").replaceChildren(
+    ...(execution.samples.length
+      ? [...execution.samples].reverse().map((sample) => {
+        const item = makeElement("article", "science-log-entry");
+        item.append(makeElement("strong", "", `${sample.name} · ${sample.massKg.toFixed(1)} kg`));
+        item.append(makeElement("small", "", `${sample.locationName} · ${sample.collectionTime}`));
+        item.append(makeElement("p", "", sample.scientificRelevance));
+        return item;
+      })
+      : [makeElement("p", "inline-status", "No samples collected.")]),
+  );
+  document.querySelector("#mission-observation-log").replaceChildren(
+    ...(execution.observations.length
+      ? [...execution.observations].reverse().map((observation) => {
+        const item = makeElement("article", "science-log-entry");
+        item.append(makeElement("strong", "", `${observation.objectiveId} · ${observation.capabilityId}`));
+        item.append(makeElement("small", "", `${observation.instrumentId} at ${observation.locationName} · ${observation.durationHours.toFixed(2)} h · ${observation.generatedDataMB.toFixed(1)} MB · ${observation.timestamp}`));
+        item.append(makeElement("p", "", observation.note));
+        return item;
+      })
+      : [makeElement("p", "inline-status", "No scientific observations recorded.")]),
+  );
+  document.querySelector("#mission-event-history").replaceChildren(
+    ...[...execution.events].reverse().slice(0, 12).map((event) => {
+      const entry = makeElement("article", "resource-event");
+      entry.dataset.status = event.status;
+      const meta = makeElement("div", "resource-event__meta");
+      meta.append(
+        makeElement("span", "event-entry__time", `T+${event.simulationTimeHours.toFixed(2)} h`),
+        makeElement("span", `resource-event__status resource-event__status--${event.status}`, event.status.toUpperCase()),
+      );
+      entry.append(meta, makeElement("p", "", event.message));
+      const timestamp = makeElement("time", "resource-event__timestamp", event.timestamp);
+      timestamp.dateTime = event.timestamp;
+      entry.append(timestamp);
+      return entry;
     }),
   );
 
@@ -1025,7 +1211,11 @@ function handleClick(event) {
     try {
       resourceActionError = "";
       if (target.dataset.resourceAction === "instrument") {
-        operateInstrument(target.dataset.instrumentId);
+        operateInstrument(
+          target.dataset.instrumentId,
+          target.dataset.objectiveId,
+          target.dataset.capabilityId,
+        );
       } else if (target.dataset.resourceAction === "transmit") {
         transmitMissionDataToControl();
       } else if (target.dataset.resourceAction === "idle") {
@@ -1047,7 +1237,50 @@ function handleClick(event) {
     return;
   }
 
-  if (target.dataset.action === "skip-loading") {
+  if (target.dataset.executionAction) {
+    try {
+      executionActionError = "";
+      if (target.dataset.executionAction === "pause") {
+        pauseMission();
+      } else if (target.dataset.executionAction === "resume") {
+        resumeMission();
+      } else if (target.dataset.executionAction === "abort") {
+        abortMission("Mission aborted by the mission team.");
+      } else if (target.dataset.executionAction === "complete") {
+        completeMission();
+      } else if (target.dataset.executionAction === "move") {
+        moveRoverToDestination();
+      }
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      executionActionError = error.message;
+      const status = document.querySelector("#execution-action-status");
+      status.textContent = error.message;
+      status.dataset.status = "critical";
+    }
+    return;
+  }
+
+  if (target.dataset.waypointId) {
+    try {
+      selectMissionDestination(target.dataset.waypointId);
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      executionActionError = error.message;
+      document.querySelector("#execution-action-status").textContent = error.message;
+    }
+  } else if (target.dataset.sampleType) {
+    try {
+      resourceActionError = "";
+      collectSample(target.dataset.sampleType);
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      resourceActionError = error.message;
+      const status = document.querySelector("#resource-operation-status");
+      status.textContent = error.message;
+      status.dataset.status = "critical";
+    }
+  } else if (target.dataset.action === "skip-loading") {
     skipLoadingSequence();
   } else if (target.dataset.action === "accept-mission") {
     acceptMission();
@@ -1101,6 +1334,8 @@ function handleChange(event) {
     document.querySelector(`[data-objective-priority="${objectiveId}"]`)?.focus();
   } else if (target instanceof HTMLSelectElement && target.id === "power-environment") {
     selectPowerEnvironment(target.value);
+  } else if (target instanceof HTMLSelectElement && target.id === "surface-destination" && target.value) {
+    selectMissionDestination(target.value);
   }
 }
 

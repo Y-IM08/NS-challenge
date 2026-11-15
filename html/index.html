@@ -152,7 +152,7 @@
                 <span class="menu-card__description">Project purpose, technology, and attribution.</span>
               </button>
             </nav>
-            <p class="menu-disclaimer">Educational simulator prototype. Rover resource accounting is active; surface movement and mission outcomes are not simulated.</p>
+            <p class="menu-disclaimer">Educational simulator prototype. Surface operations use deterministic illustrative resource accounting; real rover mobility and scientific outcomes are not simulated.</p>
           </section>
 
           <section class="page-view" data-view="briefing" aria-labelledby="briefing-title" hidden>
@@ -487,7 +487,7 @@
                   <article><h4>Power reserve</h4><p>Systems draw from a finite nominal supply. A positive margin preserves headroom, but this model does not simulate changing sunlight or timed operations.</p></article>
                   <article><h4>Data return</h4><p>Science observations need a path back to mission control. Compare instrument data load with link capacity; relay windows and scheduling are not modeled.</p></article>
                   <article><h4>Cost and evidence</h4><p>A higher-cost instrument may add a distinct capability. Compare its science contribution and resource trade-offs; price alone does not guarantee mission success.</p></article>
-                  <article><h4>Capability is not outcome</h4><p>A build can meet engineering limits and still fail to support a mission if its capabilities do not fit the site or objectives. Field operations and outcomes are not simulated here.</p></article>
+                  <article><h4>Capability is not outcome</h4><p>A build can meet engineering limits and still fail to support a mission if its capabilities do not fit the site or objectives. Field operations are illustrative and do not produce real scientific outcomes.</p></article>
                 </div>
               </section>
             </section>
@@ -503,10 +503,28 @@
               <div>
                 <p class="eyebrow">05 <span class="eyebrow__separator">/</span> SURFACE OPERATIONS</p>
                 <h1 id="control-title">Mission control</h1>
-                <p class="page-heading__description">Run deterministic rover operations and monitor mission resources. Surface movement and mission outcomes remain outside this phase.</p>
+                <p class="page-heading__description">Navigate the illustrative surface map, collect samples, investigate planned science capabilities, and monitor mission resources.</p>
               </div>
               <span class="mission-status" id="mission-resource-status"><span class="status-dot status-dot--live" aria-hidden="true"></span> RESOURCE SIMULATION ACTIVE</span>
             </div>
+
+            <section class="panel execution-console" aria-labelledby="execution-console-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">MISSION LIFECYCLE</p>
+                  <h2 id="execution-console-title">Execution console</h2>
+                </div>
+                <span class="mission-status" id="execution-status">ACTIVE</span>
+              </div>
+              <p id="execution-summary" class="execution-console__summary" aria-live="polite"></p>
+              <div class="execution-console__actions">
+                <button class="button button--secondary" type="button" data-execution-action="pause">Pause mission</button>
+                <button class="button button--secondary" type="button" data-execution-action="resume">Resume mission</button>
+                <button class="button button--secondary" type="button" data-execution-action="abort">Abort mission</button>
+                <button class="button button--primary" type="button" data-execution-action="complete">Complete mission</button>
+              </div>
+              <p id="execution-action-status" class="resource-operation-status" role="status" aria-live="polite"></p>
+            </section>
 
             <div class="control-status-grid">
               <article class="telemetry-card"><span>MISSION CLOCK</span><strong id="mission-clock-value">—</strong><small id="mission-time-remaining">— remaining</small></article>
@@ -570,6 +588,11 @@
               </div>
               <p class="resource-education">Instrument operations consume energy and mission time while adding data to finite storage. Transmission also uses time, power, and budget. Prioritize observations and downlink before resources run low.</p>
               <div id="resource-instrument-controls" class="resource-instrument-controls"></div>
+              <section class="sample-operation" aria-labelledby="sample-operation-title">
+                <h3 id="sample-operation-title">Collect a geological sample</h3>
+                <p id="sample-availability" class="inline-status"></p>
+                <div id="sample-controls" class="resource-operation-actions"></div>
+              </section>
               <div class="resource-operation-actions">
                 <button class="button button--secondary" type="button" data-resource-action="transmit">Transmit stored data</button>
                 <button class="button button--secondary" type="button" data-resource-action="idle">Advance idle time · 1 h</button>
@@ -577,7 +600,8 @@
                 <button class="button button--secondary" type="button" data-resource-action="emergency-delay">Record emergency delay · 1 h</button>
               </div>
               <p id="resource-operation-status" class="resource-operation-status" role="status" aria-live="polite"></p>
-              <p class="panel-footnote">All rates, capacities, costs, power conditions, and mission timing are illustrative gameplay parameters, not NASA specifications or operational forecasts.</p>
+              <div id="resource-event-history" class="resource-event-history" aria-live="polite"></div>
+              <p class="panel-footnote">Movement distance, duration, power, costs, sample masses, capacities, and mission timing are illustrative gameplay parameters, not NASA specifications or operational forecasts.</p>
             </section>
 
             <div class="control-layout">
@@ -585,21 +609,36 @@
                 <div class="panel__header">
                   <div>
                     <p class="eyebrow">SURFACE OPERATIONS</p>
-                    <h2 id="surface-title">Landing area overview</h2>
+                    <h2 id="surface-title">Surface exploration map</h2>
                   </div>
                   <span class="classification" id="control-site-name">SITE PREVIEW</span>
                 </div>
-                <div class="surface-map" role="img" aria-label="Illustrative Mars surface map without live rover position">
+                <div class="surface-map" role="group" aria-label="Illustrative Mars surface exploration map">
                   <div class="surface-map__grid" aria-hidden="true"></div>
                   <div class="surface-map__terrain surface-map__terrain--one" aria-hidden="true"></div>
                   <div class="surface-map__terrain surface-map__terrain--two" aria-hidden="true"></div>
                   <div class="surface-map__terrain surface-map__terrain--three" aria-hidden="true"></div>
-                  <div class="surface-map__marker surface-map__marker--site"><span></span><small>PLANNING REGION</small></div>
-                  <div class="surface-map__marker surface-map__marker--rover"><span></span><small>ROVER POSITION · NONE</small></div>
-                  <div class="surface-map__scale">ILLUSTRATIVE MAP <span>·</span> NO NAVIGATION DATA</div>
+                  <svg class="surface-map__route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                    <line id="surface-route-line" x1="0" y1="0" x2="0" y2="0" hidden></line>
+                  </svg>
+                  <div class="surface-map__waypoints" id="surface-waypoints"></div>
+                  <div class="surface-map__scale">ILLUSTRATIVE GAMEPLAY MAP <span>·</span> NOT TO SCALE</div>
                   <div class="surface-map__coordinates" id="control-site-coordinates">—</div>
                 </div>
-                <p class="panel-footnote" id="control-site-terrain">Map is a visual placeholder and does not represent actual surface topography.</p>
+                <p class="panel-footnote" id="control-site-terrain">The map is a deterministic gameplay layout, not actual surface topography or rover navigation data.</p>
+                <div class="surface-navigation">
+                  <label for="surface-destination">DESTINATION
+                    <select id="surface-destination"></select>
+                  </label>
+                  <p id="surface-route-summary" class="inline-status" aria-live="polite"></p>
+                  <button class="button button--primary" type="button" data-execution-action="move">Move rover to destination</button>
+                </div>
+                <div class="rover-execution-status" aria-live="polite">
+                  <div><span>CURRENT LOCATION</span><strong id="rover-current-location">—</strong></div>
+                  <div><span>ROVER STATUS</span><strong id="rover-operational-status">—</strong></div>
+                  <div><span>CURRENT ACTIVITY</span><strong id="rover-current-activity">—</strong></div>
+                  <div><span>DISTANCE TRAVELED</span><strong id="rover-distance-traveled">—</strong></div>
+                </div>
               </section>
 
               <aside class="control-side">
@@ -616,15 +655,35 @@
                 <section class="panel event-panel" aria-labelledby="event-title">
                   <div class="panel__header">
                     <div>
-                      <p class="eyebrow">FLIGHT LOG</p>
-                      <h2 id="event-title">Resource event history</h2>
+                      <p class="eyebrow">MISSION EVENTS</p>
+                      <h2 id="event-title">Execution timeline</h2>
                     </div>
                     <span class="status-dot status-dot--live" aria-label="Mission log active"></span>
                   </div>
-                  <div id="resource-event-history" aria-live="polite"></div>
+                  <div id="mission-event-history" aria-live="polite"></div>
                 </section>
               </aside>
             </div>
+
+            <section class="panel science-log" aria-labelledby="science-log-title">
+              <div class="panel__header">
+                <div>
+                  <p class="eyebrow">SCIENCE LOG</p>
+                  <h2 id="science-log-title">Samples & observations</h2>
+                </div>
+                <span class="classification" id="mission-progress-count">0 observations</span>
+              </div>
+              <div class="science-log__columns">
+                <section aria-labelledby="sample-inventory-title">
+                  <h3 id="sample-inventory-title">Sample inventory</h3>
+                  <div id="mission-sample-inventory"></div>
+                </section>
+                <section aria-labelledby="observation-log-title">
+                  <h3 id="observation-log-title">Scientific observations</h3>
+                  <div id="mission-observation-log"></div>
+                </section>
+              </div>
+            </section>
 
             <section class="panel timeline-panel" aria-labelledby="timeline-title">
               <div class="panel__header">
@@ -848,7 +907,7 @@
               <p class="eyebrow">MARSBOUND · MISSION TO SETTLEMENT</p>
               <h2>Built for thoughtful exploration.</h2>
               <p>This project uses HTML5, CSS3, and native JavaScript ES modules. The interface uses locally drawn CSS and SVG artwork and does not load external fonts, images, libraries, or services.</p>
-              <div class="credits-facts"><div><span>MISSION DATA</span><strong>Local seed catalog</strong></div><div><span>SESSION MODEL</span><strong>Single device · up to four slots</strong></div><div><span>SIMULATION</span><strong>Not active in this phase</strong></div></div>
+              <div class="credits-facts"><div><span>MISSION DATA</span><strong>Local seed catalog</strong></div><div><span>SESSION MODEL</span><strong>Single device · up to four slots</strong></div><div><span>SIMULATION</span><strong>Illustrative surface operations</strong></div></div>
             </section>
             <div class="page-actions"><button class="button button--secondary" type="button" data-action="return-menu">← Back to main menu</button></div>
           </section>
@@ -856,7 +915,7 @@
 
         <footer class="workspace-footer">
           <span>LOCAL MISSION LINK <span class="status-dot status-dot--live" aria-hidden="true"></span> ACTIVE</span>
-          <span>SIMULATION <strong>INTERFACE ONLY</strong></span>
+          <span>SIMULATION <strong>ILLUSTRATIVE OPERATIONS</strong></span>
           <span>BUILD <strong>01.00</strong></span>
         </footer>
       </div>

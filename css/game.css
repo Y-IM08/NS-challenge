@@ -1197,6 +1197,317 @@
   }
 }
 
+.execution-console {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+}
+
+.execution-console__summary {
+  margin: 0 18px 10px;
+  color: var(--ink-400);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.execution-console__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 0 18px;
+}
+
+.execution-console__actions .button {
+  min-height: 32px;
+  font-size: 8px;
+}
+
+.execution-console__actions button:disabled,
+.surface-map__waypoint:disabled,
+.surface-navigation button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.surface-map__route {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.surface-map__route line {
+  stroke: #ffd1a8;
+  stroke-dasharray: 2 1.5;
+  stroke-width: 0.7;
+  vector-effect: non-scaling-stroke;
+}
+
+.surface-map__waypoints {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+}
+
+.surface-map__waypoint {
+  position: absolute;
+  max-width: 105px;
+  transform: translate(-50%, -50%);
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 195, 153, 0.65);
+  border-radius: 999px;
+  background: rgba(32, 24, 25, 0.94);
+  box-shadow: 0 0 0 3px rgba(242, 118, 76, 0.11);
+  color: var(--ink-200);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 7px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.surface-map__waypoint:hover,
+.surface-map__waypoint:focus-visible,
+.surface-map__waypoint--selected {
+  border-color: #ffe0ad;
+  color: #ffe0ad;
+}
+
+.surface-map__waypoint--current {
+  border-color: var(--signal-green);
+  background: rgba(26, 57, 48, 0.96);
+  box-shadow: 0 0 0 4px rgba(95, 220, 163, 0.18);
+  color: #a4f0cb;
+}
+
+.surface-navigation {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(220px, 1.3fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.surface-navigation label {
+  display: grid;
+  gap: 5px;
+  color: var(--ink-500);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0.06em;
+}
+
+.surface-navigation select {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--surface-900);
+  color: var(--ink-200);
+  font: inherit;
+}
+
+.surface-navigation .inline-status {
+  margin: 0;
+}
+
+.rover-execution-status {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 14px 14px;
+}
+
+.rover-execution-status > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.rover-execution-status span {
+  color: var(--ink-500);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0.05em;
+}
+
+.rover-execution-status strong {
+  color: var(--ink-200);
+  font-size: 9px;
+  font-weight: 550;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.objective-status__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--signal-green);
+  transition: width 180ms ease;
+}
+
+.objective-status__detail {
+  display: block;
+  margin-top: 5px;
+  color: var(--ink-500);
+  font-size: 8px;
+}
+
+.science-log {
+  margin: 14px 0;
+  padding-bottom: 14px;
+}
+
+.science-log__columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 16px;
+}
+
+.science-log__columns h3 {
+  margin: 0 0 8px;
+  color: var(--ink-300);
+  font-size: 10px;
+}
+
+.science-log-entry {
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+
+.science-log-entry strong,
+.science-log-entry small {
+  display: block;
+}
+
+.science-log-entry strong {
+  color: var(--ink-200);
+  font-size: 9px;
+  font-weight: 550;
+}
+
+.science-log-entry small,
+.science-log-entry p {
+  margin: 4px 0 0;
+  color: var(--ink-500);
+  font-size: 8px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.sample-operation {
+  margin: 12px 18px 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.sample-operation h3 {
+  margin: 0 0 5px;
+  color: var(--ink-300);
+  font-size: 10px;
+}
+
+.sample-operation .inline-status {
+  margin: 0 0 8px;
+}
+
+.resource-event-history {
+  margin: 12px 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.resource-event-history .resource-event {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.resource-event-history .resource-event p {
+  margin: 5px 0 0;
+  color: var(--ink-300);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+#mission-event-history {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 0 14px 12px;
+}
+
+#mission-event-history .resource-event {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+#mission-event-history .resource-event p {
+  margin: 5px 0;
+  color: var(--ink-300);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.mission-status[data-status="normal"] {
+  color: var(--signal-green);
+}
+
+.mission-status[data-status="warning"] {
+  color: var(--signal-amber);
+}
+
+.mission-status[data-status="critical"] {
+  color: #ff9a85;
+}
+
+@media (max-width: 760px) {
+  .surface-navigation {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .surface-navigation > button {
+    grid-column: 1 / -1;
+  }
+
+  .rover-execution-status {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 540px) {
+  .science-log__columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .execution-console__summary,
+  .execution-console__actions,
+  .sample-operation {
+    margin-right: 12px;
+    margin-left: 12px;
+  }
+
+  .execution-console__actions {
+    padding: 0;
+  }
+
+  .surface-navigation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .surface-navigation > button {
+    grid-column: auto;
+  }
+
+  .surface-map__waypoint {
+    max-width: 78px;
+    padding: 4px 5px;
+    font-size: 6px;
+  }
+}
+
 .planning-input-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(130px, 0.55fr);

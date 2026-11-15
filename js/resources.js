@@ -160,30 +160,34 @@ export function calculateAvailablePower(
 
 export function calculateEnergyConsumption(
   roverConfiguration,
-  { mode = "idle", instrumentId = null, durationHours = 0 } = {},
+  { mode = "idle", instrumentId = null, durationHours = 0, movementPowerW = 0 } = {},
   settings = MISSION_RESOURCE_CONFIG,
 ) {
   assertFiniteNonNegative(durationHours, "Operation duration");
+  assertFiniteNonNegative(movementPowerW, "Movement power");
   const components = installedComponents(roverConfiguration);
-  const roverOperatingPowerW = mode === "instrument" || mode === "transmit"
+  const roverOperatingPowerW = ["instrument", "transmit", "movement", "sample"].includes(mode)
     ? components
       .filter(({ categoryId }) => !["instruments", "communications", "power", "landing"].includes(categoryId))
       .reduce((total, component) => total + (component.operatingPowerW ?? 0), 0)
     : 0;
   const instrument = instrumentId ? getOption("instruments", instrumentId) : null;
-  if (mode === "instrument" && !instrument) {
+  if ((mode === "instrument" || mode === "sample") && !instrument) {
     throw new RangeError(`Unknown instrument: ${instrumentId}`);
   }
-  const instrumentPowerW = mode === "instrument" ? instrument.operatingPowerW : 0;
+  const instrumentPowerW = mode === "instrument" || mode === "sample"
+    ? instrument.operatingPowerW
+    : 0;
   const communication = getOption("communications", roverConfiguration?.communications);
   const communicationPowerW = mode === "transmit"
     ? communication?.operatingPowerW ?? 0
     : 0;
   const maintenancePowerW = mode === "maintenance" ? settings.maintenancePowerW : 0;
   const standbyPowerW = settings.standbyPowerW;
+  const operationMovementPowerW = mode === "movement" ? movementPowerW : 0;
   const totalPowerW = round(
     roverOperatingPowerW + instrumentPowerW + communicationPowerW
-    + maintenancePowerW + standbyPowerW,
+    + maintenancePowerW + operationMovementPowerW + standbyPowerW,
   );
   assertFiniteNonNegative(totalPowerW, "Total operation power");
 
@@ -192,6 +196,7 @@ export function calculateEnergyConsumption(
     instrumentPowerW,
     communicationPowerW,
     maintenancePowerW,
+    movementPowerW: operationMovementPowerW,
     standbyPowerW,
     totalPowerW,
     durationHours,
@@ -378,6 +383,7 @@ export function createMissionResources({
         instrumentPowerW: 0,
         communicationPowerW: 0,
         maintenancePowerW: 0,
+        movementPowerW: 0,
         standbyPowerW: 0,
       },
       status: "normal",
@@ -390,6 +396,7 @@ export function createMissionResources({
       operationsCredits: 0,
       communicationCredits: 0,
       maintenanceCredits: 0,
+      sampleCredits: 0,
       remainingCredits: settings.initialBudgetCredits - initialExpenditure,
     },
     data: {
@@ -412,6 +419,8 @@ export function createMissionResources({
       idleHours: 0,
       emergencyDelayHours: 0,
       maintenanceHours: 0,
+      movementHours: 0,
+      sampleCollectionHours: 0,
     },
     mass: {
       roverDryMassKg: round(metrics.totalMassKg - installedInstrumentMassKg),
@@ -509,6 +518,8 @@ function applyTimedOperation(resources, roverConfiguration, {
   dataGeneratedMB = 0,
   dataTransmittedMB = 0,
   clearStoredData = false,
+  movementPowerW = 0,
+  sampleMassKg = 0,
   budgetCategory = "operationsCredits",
   fixedCostCredits = null,
 }, settings) {
@@ -532,10 +543,15 @@ function applyTimedOperation(resources, roverConfiguration, {
       `Data storage limit exceeded: ${round(resources.data.storageCapacityMB - resources.data.storedMB)} MB remain, but the operation generates ${round(dataGeneratedMB)} MB.`,
     );
   }
+  if (sampleMassKg > resources.mass.remainingPayloadCapacityKg) {
+    throw new Error(
+      `Sample payload limit exceeded: ${round(resources.mass.remainingPayloadCapacityKg)} kg remain, but the sample weighs ${round(sampleMassKg)} kg.`,
+    );
+  }
 
   const energy = calculateEnergyConsumption(
     roverConfiguration,
-    { mode, instrumentId, durationHours },
+    { mode, instrumentId, durationHours, movementPowerW },
     settings,
   );
   const powerResult = simulatePowerInterval(
@@ -550,12 +566,14 @@ function applyTimedOperation(resources, roverConfiguration, {
     ...resources.time,
     elapsedHours,
     remainingHours: round(resources.time.missionDurationHours - elapsedHours),
-    roverOperationHours: round(resources.time.roverOperationHours + (mode === "instrument" || mode === "transmit" ? durationHours : 0)),
+    roverOperationHours: round(resources.time.roverOperationHours + (["instrument", "transmit", "movement", "sample"].includes(mode) ? durationHours : 0)),
     instrumentOperationHours: round(resources.time.instrumentOperationHours + (mode === "instrument" ? durationHours : 0)),
     communicationHours: round(resources.time.communicationHours + (mode === "transmit" ? durationHours : 0)),
     idleHours: round(resources.time.idleHours + (mode === "idle" ? durationHours : 0)),
     emergencyDelayHours: round(resources.time.emergencyDelayHours + (mode === "emergency-delay" ? durationHours : 0)),
     maintenanceHours: round(resources.time.maintenanceHours + (mode === "maintenance" ? durationHours : 0)),
+    movementHours: round(resources.time.movementHours + (mode === "movement" ? durationHours : 0)),
+    sampleCollectionHours: round(resources.time.sampleCollectionHours + (mode === "sample" ? durationHours : 0)),
   };
   const budget = {
     ...resources.budget,
@@ -589,11 +607,19 @@ function applyTimedOperation(resources, roverConfiguration, {
         communicationPowerW: energy.communicationPowerW,
         maintenancePowerW: energy.maintenancePowerW,
         standbyPowerW: energy.standbyPowerW,
+        movementPowerW: energy.movementPowerW,
       },
     },
     budget,
     data,
     time,
+    mass: sampleMassKg > 0
+      ? {
+        ...resources.mass,
+        payloadMassKg: round(resources.mass.payloadMassKg + sampleMassKg),
+        remainingPayloadCapacityKg: round(resources.mass.remainingPayloadCapacityKg - sampleMassKg),
+      }
+      : resources.mass,
   };
   const result = withStatuses(next);
   return eventFor(result, type, description, {
@@ -605,6 +631,8 @@ function applyTimedOperation(resources, roverConfiguration, {
     operationsCredits: -costBreakdown.operationsCredits,
     communicationCredits: -costBreakdown.communicationCredits,
     maintenanceCredits: budgetCategory === "maintenanceCredits" ? -expenditure : 0,
+    sampleCredits: budgetCategory === "sampleCredits" ? -expenditure : 0,
+    sampleMassKg,
     dataStoredMB: dataGeneratedMB - (clearStoredData ? dataTransmittedMB : 0),
     dataTransmittedMB,
   });
@@ -735,6 +763,44 @@ export function recordMaintenance(
   }, settings);
 }
 
+export function recordMissionMovement(
+  resources,
+  roverConfiguration,
+  { durationHours, movementPowerW, settings = MISSION_RESOURCE_CONFIG } = {},
+) {
+  requirePositiveDuration(durationHours);
+  return applyTimedOperation(resources, roverConfiguration, {
+    type: "rover-moved",
+    description: `Rover movement completed in ${durationHours} h.`,
+    mode: "movement",
+    durationHours,
+    movementPowerW,
+  }, settings);
+}
+
+export function recordMissionSampleCollection(
+  resources,
+  roverConfiguration,
+  { sampleMassKg, durationHours, costCredits, settings = MISSION_RESOURCE_CONFIG } = {},
+) {
+  requirePositiveDuration(durationHours);
+  assertFiniteNonNegative(sampleMassKg, "Sample mass");
+  assertFiniteNonNegative(costCredits, "Sample collection cost");
+  if (!roverConfiguration?.instruments?.includes("regolith-sampler")) {
+    throw new Error("Sample collection requires an installed regolith sampling system.");
+  }
+  return applyTimedOperation(resources, roverConfiguration, {
+    type: "sample-collected",
+    description: `Collected an illustrative ${sampleMassKg} kg sample.`,
+    mode: "sample",
+    instrumentId: "regolith-sampler",
+    durationHours,
+    sampleMassKg,
+    budgetCategory: "sampleCredits",
+    fixedCostCredits: costCredits,
+  }, settings);
+}
+
 export function setPowerEnvironment(
   resources,
   roverConfiguration,
@@ -783,7 +849,8 @@ export function getResourceSummary(resources) {
         + resources.budget.launchCredits
         + resources.budget.operationsCredits
         + resources.budget.communicationCredits
-        + resources.budget.maintenanceCredits,
+        + resources.budget.maintenanceCredits
+        + resources.budget.sampleCredits,
       status: resources.status.budget,
     },
     data: {

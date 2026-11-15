@@ -1,8 +1,8 @@
-`# MARSBOUND: Mission to Settlement
+# MARSBOUND: Mission to Settlement
 
 ## Purpose and current phase
 
-MARSBOUND is an educational Mars mission-design simulator. The app provides a complete visual screen architecture and a single-device navigation foundation for up to four local player slots. Mission Planning stores and validates a structured mission plan and estimates selected resource use. The Rover Design Studio calculates and validates an illustrative engineering configuration; Mission Control runs deterministic power, budget, data, time, and mass accounting for selected rover operations. It does not simulate rover physics, mission outcomes, scoring, or online play.
+MARSBOUND is an educational Mars mission-design simulator. The app provides a complete visual screen architecture and a single-device navigation foundation for up to four local player slots. Mission Planning stores and validates a structured mission plan and estimates selected resource use. The Rover Design Studio calculates and validates an illustrative engineering configuration. Mission Control runs deterministic waypoint movement, sample collection, capability-specific scientific observations, communications, and resource accounting. It does not simulate rover physics, actual scientific results, scoring, or online play.
 
 ## Technology and runtime
 
@@ -27,18 +27,20 @@ M/
 │   ├── rover.js         # Pure rover calculations, science coverage, and validation
 │   ├── planning.js      # Pure plan estimates, risk assessment, and readiness validation
 │   ├── resources.js     # Pure resource accounting, operations, validation, and events
+│   ├── mission.js       # Lifecycle, waypoint operations, samples, observations, and progress
 │   └── ui.js            # DOM rendering, event delegation, view navigation
 ├── tests/
 │   ├── rover.test.js    # Rover calculation and validation tests
 │   ├── resources.test.js # Resource calculations and operation tests
 │   ├── state-rover.test.js # Rover/resource state and navigation guard tests
 │   ├── planning.test.js # Mission plan estimate and validation tests
-│   └── planning-state.test.js # Plan state freshness and navigation guard tests
+│   ├── planning-state.test.js # Plan state freshness and navigation guard tests
+│   └── mission.test.js  # Mission execution and resource integration tests
 ├── README.md
 └── PROJECT_CONTEXT.md
 ```
 
-The historical `mission.js`, `scientist.js`, and `evalauation.js` files remain unused. The evaluation filename appears misspelled and should be corrected when that module is implemented. `rover.js` is active and imported by state and UI modules. No framework or third-party dependency is used.
+`mission.js` is the active pure execution/domain module; it coordinates `planning.js`, `rover.js`, and `resources.js` without owning app state or rendering DOM. `scientist.js` and `evalauation.js` remain outside the current phase. The evaluation filename appears misspelled; resolve it only when that later module is implemented. No framework or third-party dependency is used.
 
 ## Implemented screens
 
@@ -47,7 +49,7 @@ The historical `mission.js`, `scientist.js`, and `evalauation.js` files remain u
 3. Four local player slots and Aerospace Engineer, Mars Satellite Controller, Finance Administrator, and Mission Designer role cards.
 4. Mission planning with editable profile/name/duration, landing-site context, ranked objectives, resource estimates, strategy guidance, deterministic risks, validation, recommendations, and readiness.
 5. Rover design studio with CSS/SVG schematic, live mass/cost/power/payload/reliability indicators, chassis/mobility/power/instrument/communication/landing selection, reset, validation, science coverage, terrain-fit indicator, and role guidance.
-6. Mission control dashboard with live modeled resource state, instrument/communication/idle/maintenance actions, power environment selector, event history, and surface map/science objective previews.
+6. Mission control with lifecycle controls, waypoint navigation, resource costs, sample inventory, capability-specific observations, objective progress, science logs, and mission events.
 7. Reusable field-challenge layout with severity, discussion responses, and an explicitly non-simulated consequence area.
 8. Dr. Chen profile, fixed educational dialogue, and regolith science note.
 9. Mission results layout with objective, resource, engineering, and evaluation placeholders.
@@ -57,9 +59,9 @@ The historical `mission.js`, `scientist.js`, and `evalauation.js` files remain u
 
 The primary path is `home → briefing → roles → planning → rover → control → challenge → scientist → results`. Buttons advance only along defined transitions. Back buttons and Escape use the state history; a persistent Main Menu action returns to the home screen. Mission profiles opened from the archive use the same briefing workflow.
 
-`state.js` owns the frozen state snapshots and transition guards. It tracks selected profile, local player-role assignments, structured mission-plan configuration and current estimates/risks/validation, landing-site and rover component selections, mission resource state, challenge discussion selection, and display preference. State publication rebuilds the planning report from the current plan, site, mission profile, and rover, preventing stale readiness after configuration changes or rover reset. Mission setup must pass before continuing from planning to rover design. Mission Control requires current full mission and rover validation; resource state initializes once with the plan's mission profile and duration. Rover and mission-plan configuration are locked after resource initialization. Resource operations are only allowed from Mission Control and publish new frozen snapshots. These selections are not persisted. At least one role assignment is required to continue to planning; unused slots are permitted.
+`state.js` owns the frozen snapshots and guarded transitions. It tracks the selected profile, local roles, mission-plan configuration and validation, landing site, rover configuration, resources, execution status/location/destination/movement/sample/observation/objective/event history, challenge selection, and display preference. State publication rebuilds the planning report from current inputs. Entering Mission Control requires fresh full-plan and rover validation, initializes resources and execution once, and starts the active field session. Rover and mission-plan configuration lock after resource initialization. Operations publish new frozen snapshots; rejected operations leave mission and resource state unchanged. These selections are not persisted. At least one role assignment is required to continue to planning; unused slots are permitted.
 
-`data.js` owns the preserved three mission profiles plus role, site, rover component, science objective/capability, challenge, initial-state data, rover limits, planning strategies/limits, power environments, and resource-model parameters. `rover.js` contains pure calculation and validation functions; it does not read or mutate app state or render DOM. `planning.js` derives estimates, risks, and a structured validation/readiness report from existing catalogs and rover/resource APIs. `resources.js` reuses rover metrics/cost and implements pure resource-state creation, calculations, deterministic operations, and event history. `ui.js` renders all views with reusable element and catalog rendering functions and delegates events from the document. `main.js` initializes the UI and loading transition.
+`data.js` owns the mission/component catalogs, science capability requirements, surface waypoints, completion requirements, and gameplay parameters. `rover.js` contains pure calculation/validation functions. `planning.js` derives estimates, risks, and readiness from existing catalogs and rover/resource APIs. `resources.js` owns battery, cost, data, time, and payload accounting. `mission.js` owns pure execution operations and records; it consumes validated plans, rover metrics, and resource functions. `ui.js` renders views and delegates events. `main.js` initializes UI/loading.
 
 ## Mission planning and validation
 
@@ -92,15 +94,27 @@ Science mappings cover mineral identification, regolith characterization, atmosp
 
 The resource module tracks five categories. Units are explicit and operations are deterministic:
 
-- **Power:** Watts are instantaneous generation/demand; watt-hours are energy; hours are operation duration. For solar power, available W = nominal W × daylight fraction × (1 − dust accumulation) × solar efficiency. Radioisotope generation uses nominal output without solar factors. Timed energy demand = total operation load W × duration hours. Net power charges or depletes a finite battery, bounded by configured capacity and a 5% reserve.
-- **Budget:** Initial budget is 15,000 illustrative credits. Initial deductions use rover construction cost from `calculateRoverCost()` plus 1,800 launch credits. Operations cost 4 credits/hour; communications are separately tracked at 2 additional credits/hour; maintenance costs 180 credits for 2 hours. Insufficient funds reject an operation without partial cost/time/power changes.
+- **Power:** Watts are instantaneous generation/demand; watt-hours are energy; hours are operation duration. For solar power, available W = nominal W × daylight fraction × (1 − dust accumulation) × solar efficiency. Radioisotope generation uses nominal output without solar factors. Timed energy demand uses the configured rover, instrument, communication, movement, maintenance, and standby loads. Net power charges or depletes a finite battery, bounded by configured capacity and a 5% reserve.
+- **Budget:** Initial budget is 15,000 illustrative credits. Initial deductions use rover construction cost from `calculateRoverCost()` plus 1,800 launch credits. Timed operations cost 4 credits/hour; communications are separately tracked at 2 additional credits/hour; maintenance costs 180 credits for 2 hours; sample collection uses its configured fixed cost. Insufficient funds reject an operation without partial cost/time/power changes.
 - **Data:** Existing instrument `dataUnitsPerOperation` values convert to MB using the configured 1 MB/unit gameplay factor. A 512 MB store is enforced before instrument operation. Successful transmission moves stored MB to transmitted MB at the selected communication capacity in MB/sol. Failed transmissions increment a counter and append an event while preserving stored data.
-- **Time:** Mission elapsed/remaining time and activity buckets are in hours, with 24 gameplay hours per sol. This is explicitly a gameplay simplification; a Martian sol is about 24 h 39 min. The illustrative fixed epoch is `2040-01-01T00:00:00.000Z`. Instrument actions default to 1 hour; transmission time derives from volume/link capacity; idle and maintenance durations are explicit. The engine rejects operations that extend beyond the selected mission duration.
-- **Mass:** `calculateRoverMetrics()` supplies total/dry/instrument/payload capacities and `calculateRoverCost()` supplies construction expense; no mass formula is duplicated. Sample payload is tracked at 0 kg because sample collection mass is not yet modeled.
+- **Time:** Mission elapsed/remaining time and activity buckets are in hours, with 24 gameplay hours per sol. This is explicitly a gameplay simplification; a Martian sol is about 24 h 39 min. The illustrative fixed epoch is `2040-01-01T00:00:00.000Z`. Instrument actions default to 1 hour; movement time uses illustrative distance/speed; transmission time derives from volume/link capacity; sample, idle, and maintenance durations are explicit. The engine rejects operations that extend beyond the selected mission duration.
+- **Mass:** `calculateRoverMetrics()` supplies total/dry/instrument/payload capacities and `calculateRoverCost()` supplies construction expense; no rover mass formula is duplicated. Sample mass is added to the resource payload and reduces remaining capacity.
 
-`MISSION_RESOURCE_CONFIG` and `POWER_ENVIRONMENTS` centralize all invented settings, including budget, category-specific expense rates, battery capacity/reserve, storage limit, data conversion, standby power, time epoch, daylight, dust, and solar efficiency. The event log records deterministic sequence IDs, success/failure status, event type and description, ISO timestamps derived from mission epoch and elapsed simulation hours, mission-clock time, and resource deltas. Status categories are normal, warning, or critical. The Mission Control UI provides instrument-operation buttons, transmit, idle, maintenance, and an environment selector; it displays power margin, free storage, separate communications spending, and event status/deltas. Failed operation messages are surfaced; failed transmissions preserve stored data.
+`MISSION_RESOURCE_CONFIG`, `POWER_ENVIRONMENTS`, and `MISSION_EXECUTION_CONFIG` centralize the illustrative settings. Resource events record sequential IDs, success/failure, event type/description, simulation timestamps, and resource deltas. Mission execution records add lifecycle, movement, sample, observation, and transmission activity. The Mission Control UI exposes navigation, samples, capability-level science operations, transmission, idle, maintenance, lifecycle controls, and an environment selector.
 
-These settings are illustrative gameplay parameters, not verified NASA specifications, measurements, or mission forecasts. No real power-system degradation, changing weather, actual battery chemistry, downlink windows, compression, transmission loss, sample mass, emergency spending, rover movement, or science-result generation is modeled.
+These settings are illustrative gameplay parameters, not verified NASA specifications, measurements, or mission forecasts. Waypoint distances, movement times/power, sample types/masses, and completion conditions are gameplay abstractions. No real power-system degradation, changing weather, actual battery chemistry, physical terrain traversal, downlink windows, compression, transmission loss, or scientific-result interpretation is modeled.
+
+## Mission execution
+
+`mission.js` is a pure domain layer with no DOM or separate mutable state owner. `initializeMissionExecution()` rebuilds the plan and verifies the plan signature, readiness, mission profile, landing site, and rover configuration before creating Phase 4 resources and starting execution. `state.js` publishes the resulting resource and execution snapshots together.
+
+- `MISSION_SURFACE_WAYPOINTS` provides a site-specific starting point and exploration destinations. Straight-line map coordinates scaled by `MISSION_EXECUTION_CONFIG.mapDistanceScaleKm` produce deterministic illustrative route distances; configured speed, power, and existing hourly resource rates estimate duration and cost. Route selection cannot cross to another site's map.
+- Sample collection requires an installed `regolith-sampler`, a sample type available at the current waypoint, and remaining payload. `calculateRoverMetrics()` supplies rover payload limits; `resources.js` accounts for the collection duration, energy, cost, and sample mass before the mission inventory is updated.
+- Scientific operations select an objective and one required capability. The instrument must be installed and mapped to that capability, the objective selected in the plan, and the objective available at the current waypoint. The operation must pass resource/time/storage checks before its illustrative observation is recorded. Each capability requires its own successful observation; agricultural or atmospheric objectives with several requirements remain in progress until all are investigated.
+- Mission lifecycle states include active, paused, completed, failed, and aborted. Pause/resume and terminal transitions are guarded. Operations require an active session. Completion requires all selected objectives complete, the configured minimum number of explored waypoints, and transmitted data; these settings are in `MISSION_COMPLETION_REQUIREMENTS`.
+- Execution history, resource events, collected samples, observations, explored locations, and objective counts are presented in Mission Control. Failed transmission attempts use the resource module's explicit failure record while retaining data; other rejected operations throw and do not publish partial state.
+
+The map is not based on actual Mars surface data. Movement is not physics, collection types are not confirmed geological findings, and observations are not scientific measurements. The app does not infer a real landing route, sample composition, agricultural viability, or mission success.
 
 ## Verification
 
@@ -110,9 +124,9 @@ Run the built-in Node test suite from the project root:
 node --experimental-default-type=module --test tests/*.test.js
 ```
 
-Tests exercise initial/incomplete and valid rover builds, component sums, removal/toggle/reset behavior, rover limits and science coverage, resource solar/radioisotope behavior, power/energy/battery reserve/capacity and atomic failure, budget charges/insufficiency, data collection/storage/transmission/failure retention, time boundaries, maintenance/emergency delay, mass reuse, event history, immutable state transitions, and mission-control navigation.
+Tests exercise initial/incomplete and valid rover builds, component sums, removal/toggle/reset behavior, rover limits and science coverage, resource power/energy/battery/budget/data/time behavior, planning/readiness and mission-control guards, mission initialization, movement and atomic resource failures, sample availability/payload, scientific capability progress, completion requirements, and immutable execution state.
 
-Current verification: **64 Node.js tests passed, 0 failed**. Static UI checks found **171 unique HTML IDs and 114 queried IDs**, with no missing selector targets. Browser smoke testing confirmed the loading transition and main menu → briefing → roles → planning → rover workflow. Mission profile, site, objective selection, priority, strategy, and duration changes updated and persisted in the planning view; the incomplete rover kept Mission Control disabled with validation guidance. Escape returned to planning and keyboard focus had a visible 2px outline. Responsive checks at approximately 250, 400, and 850 CSS pixels found no horizontal overflow. Reload/startup produced no browser console or page errors.
+Current verification: **73 Node.js tests passed, 0 failed**. Browser verification for the complete new Mission Control workflow remains pending after implementation.
 
 ## Visual and accessibility direction
 
@@ -120,9 +134,9 @@ The interface uses deep-space/navy surfaces, Mars-orange accents, technical labe
 
 ## Explicit limitations
 
-- Rover calculations and resource parameters are illustrative; no rover physics, thermal model, actual aerospace qualification, or mission outcome simulation is modeled.
-- Mission resource dashboard values are derived from centralized game state; the surface map is illustrative and has no navigation data.
-- Science objectives are planned and capability-checked but not scientifically assessed; no measurements or discoveries are generated.
+- Rover calculations, surface routes, sample classifications, and resource parameters are illustrative; no rover physics, thermal model, actual aerospace qualification, or mission outcome scoring is modeled.
+- Mission Control runs deterministic waypoint navigation, sample inventory, objective capability progress, and resource transactions, but the surface map is not actual Mars topography and movement does not simulate physical terrain.
+- Observations and sample descriptions are illustrative records only; no measurements, discoveries, or scientific conclusions are generated.
 - The field scenario response is only a discussion prompt; it does not change mission state or create consequences.
 - Dr. Chen content is fixed, not a branching dialogue system.
 - Results do not claim success or failure and do not award a score.
@@ -130,5 +144,5 @@ The interface uses deep-space/navy surfaces, Mars-orange accents, technical labe
 
 ## Scope boundary
 
-Phase 5 implements mission configuration and validation only. It does not implement Phase 6 mission-execution behavior, sample acquisition, rover movement, authored challenge outcomes, progressive scientist dialogue, mission scoring, or results evaluation.
+Phase 6 adds deterministic mission execution, waypoint navigation, sample acquisition, capability-level observations, lifecycle control, objective progress, and resource integration. It does not implement future challenge consequences, progressive scientist dialogue, mission scoring, or results evaluation.
 `

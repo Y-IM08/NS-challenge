@@ -17,14 +17,24 @@ import {
   validatePlanningInputs,
 } from "./planning.js";
 import {
-  advanceMissionTime as advanceResourcesTime,
-  collectScientificData,
-  createMissionResources,
-  recordEmergencyDelay as recordResourcesEmergencyDelay,
-  recordMaintenance as recordResourcesMaintenance,
-  setPowerEnvironment as updateResourcesEnvironment,
-  transmitMissionData,
-} from "./resources.js";
+  abortMissionExecution,
+  collectMissionSample,
+  completeMissionExecution,
+  executeMissionIdle,
+  executeMissionEmergencyDelay,
+  executeMissionMaintenance,
+  executeMissionTransmission,
+  failMissionExecution,
+  getScientificOperationOptions,
+  initializeMissionExecution,
+  moveMissionRover,
+  pauseMissionExecution,
+  performNextScientificObservation,
+  performScientificObservation,
+  resumeMissionExecution,
+  selectMissionDestination as selectExecutionDestination,
+  updateMissionPowerEnvironment,
+} from "./mission.js";
 
 const VALID_SCREENS = new Set([
   "home",
@@ -168,17 +178,26 @@ export function navigateTo(screen) {
       .join(" ") || "Complete and validate the mission plan first.";
     throw new Error(`Mission plan is not ready: ${failures}`);
   }
-  const nextState = screen === "control" && state.resources === null
-    ? {
+  let nextState = state;
+  if (screen === "control" && state.resources === null) {
+    const initialized = initializeMissionExecution({
+      missionId: state.currentMissionId,
+      missionPlan,
+      roverConfiguration: state.rover,
+      landingSiteId: state.selectedLandingSiteId,
+    });
+    nextState = {
       ...state,
       missionPlan,
-      resources: createMissionResources({
-        roverConfiguration: state.rover,
-        missionId: state.currentMissionId,
-        missionDurationSols: missionPlan.configuration.durationSols,
-      }),
-    }
-    : screen === "control" ? { ...state, missionPlan } : state;
+      resources: initialized.resources,
+      missionExecution: initialized.execution,
+    };
+  } else if (screen === "control") {
+    nextState = {
+      ...state,
+      missionPlan,
+    };
+  }
   return navigate(screen, nextState);
 }
 
@@ -210,6 +229,7 @@ export function selectMission(missionId) {
     currentMissionId: null,
     missionPlan: null,
     resources: null,
+    missionExecution: null,
     screen: "briefing",
     screenHistory: [...state.screenHistory, state.screen],
   });
@@ -230,6 +250,7 @@ export function acceptMission() {
       ),
     },
     resources: null,
+    missionExecution: null,
     screen: "roles",
     screenHistory: [...state.screenHistory, state.screen],
   });
@@ -446,40 +467,114 @@ function requireMissionControl() {
   if (state.screen !== "control" || !state.resources) {
     throw new Error("Mission resource operations are only available in mission control.");
   }
+  if (!state.missionExecution) {
+    throw new Error("Mission execution is not initialized.");
+  }
 }
 
-export function operateInstrument(instrumentId, durationHours = MISSION_RESOURCE_CONFIG.defaultInstrumentOperationHours) {
+function publishMissionOperation(result) {
+  return publish({
+    ...state,
+    resources: result.resources,
+    missionExecution: result.execution,
+  });
+}
+
+export function operateInstrument(
+  instrumentId,
+  objectiveId = null,
+  capabilityId = null,
+  durationHours = MISSION_RESOURCE_CONFIG.defaultInstrumentOperationHours,
+) {
   requireMissionControl();
-  const resources = collectScientificData(state.resources, state.rover, instrumentId, durationHours);
-  return publish({ ...state, resources });
+  if (!objectiveId && !capabilityId) {
+    return publishMissionOperation(performNextScientificObservation(
+      state.missionExecution,
+      state.resources,
+      state.rover,
+      instrumentId,
+      durationHours,
+    ));
+  }
+  return publishMissionOperation(performScientificObservation(
+    state.missionExecution,
+    state.resources,
+    state.rover,
+    instrumentId,
+    objectiveId,
+    capabilityId,
+    durationHours,
+  ));
+}
+
+export function getAvailableScientificOperations(instrumentId) {
+  requireMissionControl();
+  return getScientificOperationOptions(state.missionExecution, state.rover, instrumentId);
+}
+
+export function selectMissionDestination(waypointId) {
+  requireMissionControl();
+  const missionExecution = selectExecutionDestination(state.missionExecution, waypointId);
+  return publish({ ...state, missionExecution });
+}
+
+export function moveRoverToDestination(waypointId = state.missionExecution?.selectedDestinationId) {
+  requireMissionControl();
+  const result = moveMissionRover(
+    state.missionExecution,
+    state.resources,
+    state.rover,
+    waypointId,
+  );
+  return publishMissionOperation(result);
+}
+
+export function collectSample(sampleTypeId) {
+  requireMissionControl();
+  return publishMissionOperation(collectMissionSample(
+    state.missionExecution,
+    state.resources,
+    state.rover,
+    sampleTypeId,
+  ));
 }
 
 export function transmitMissionDataToControl() {
   requireMissionControl();
-  const resources = transmitMissionData(state.resources, state.rover);
-  return publish({ ...state, resources });
+  return publishMissionOperation(executeMissionTransmission(
+    state.missionExecution,
+    state.resources,
+    state.rover,
+  ));
 }
 
 export function advanceMissionIdleTime(durationHours) {
   requireMissionControl();
-  const resources = advanceResourcesTime(state.resources, state.rover, durationHours);
-  return publish({ ...state, resources });
+  return publishMissionOperation(executeMissionIdle(
+    state.missionExecution,
+    state.resources,
+    state.rover,
+    durationHours,
+  ));
 }
 
 export function recordMaintenance() {
   requireMissionControl();
-  const resources = recordResourcesMaintenance(state.resources, state.rover);
-  return publish({ ...state, resources });
+  return publishMissionOperation(executeMissionMaintenance(
+    state.missionExecution,
+    state.resources,
+    state.rover,
+  ));
 }
 
 export function recordEmergencyDelay(durationHours) {
   requireMissionControl();
-  const resources = recordResourcesEmergencyDelay(
+  return publishMissionOperation(executeMissionEmergencyDelay(
+    state.missionExecution,
     state.resources,
     state.rover,
     durationHours,
-  );
-  return publish({ ...state, resources });
+  ));
 }
 
 export function selectPowerEnvironment(environmentId) {
@@ -487,12 +582,49 @@ export function selectPowerEnvironment(environmentId) {
   if (state.resources.power.environmentId === environmentId) {
     return state;
   }
-  const resources = updateResourcesEnvironment(
+  return publishMissionOperation(updateMissionPowerEnvironment(
+    state.missionExecution,
     state.resources,
     state.rover,
     environmentId,
-  );
-  return publish({ ...state, resources });
+  ));
+}
+
+export function pauseMission() {
+  requireMissionControl();
+  return publish({
+    ...state,
+    missionExecution: pauseMissionExecution(state.missionExecution, state.resources),
+  });
+}
+
+export function resumeMission() {
+  requireMissionControl();
+  return publish({
+    ...state,
+    missionExecution: resumeMissionExecution(state.missionExecution, state.resources),
+  });
+}
+
+export function completeMission() {
+  requireMissionControl();
+  return publish({ ...state, missionExecution: completeMissionExecution(state.missionExecution, state.resources) });
+}
+
+export function abortMission(reason) {
+  requireMissionControl();
+  return publish({
+    ...state,
+    missionExecution: abortMissionExecution(state.missionExecution, reason, state.resources),
+  });
+}
+
+export function failMission(reason) {
+  requireMissionControl();
+  return publish({
+    ...state,
+    missionExecution: failMissionExecution(state.missionExecution, reason, state.resources),
+  });
 }
 
 export function setPreference(name, value) {
