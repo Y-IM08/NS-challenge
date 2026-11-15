@@ -56,6 +56,10 @@
           <li data-stage="scientist"><span>07</span><span>Science briefing</span></li>
           <li data-stage="results"><span>08</span><span>Results review</span></li>
         </ol>
+        <button class="sidebar-scientist-link" id="scientist-channel-link" type="button" data-route="scientist" hidden>
+          <span>Dr. Chen science channel</span>
+          <span id="scientist-unread-count">0 NEW</span>
+        </button>
 
         <div class="sidebar__footer">
           <div class="connection-indicator">
@@ -440,6 +444,18 @@
                   </div>
                   <button class="button button--quiet rover-reset" type="button" data-action="reset-rover">Reset configuration</button>
                 </div>
+                <div class="rover-recommendation">
+                  <div>
+                    <p class="eyebrow">MISSION-BASED STARTING POINT</p>
+                    <p>Build the lowest-cost catalog rover that covers your selected objectives and meets mandatory engineering limits. You can customize it afterward.</p>
+                  </div>
+                  <button class="button button--primary" id="build-recommended-rover" type="button" data-action="build-recommended-rover">
+                    Build Recommended Rover
+                  </button>
+                </div>
+                <p id="rover-recommendation-status" class="rover-recommendation-status" role="status" aria-live="polite">
+                  Select objectives in mission planning, then build a recommended configuration or choose components manually.
+                </p>
                 <div class="rover-categories" id="rover-categories"></div>
                 <p class="panel-footnote">All catalog values are illustrative gameplay values, not verified NASA specifications. Power output is nominal; environmental variability is not simulated.</p>
               </section>
@@ -721,6 +737,17 @@
               </div>
               <div class="timeline-track" id="mission-timeline"></div>
             </section>
+            <section class="panel control-scientist-panel" aria-labelledby="control-scientist-title">
+              <div>
+                <p class="eyebrow">SCIENCE TEAM CHANNEL</p>
+                <h2 id="control-scientist-title">Dr. Chen</h2>
+                <p id="control-scientist-copy" aria-live="polite">Dr. Chen is monitoring the mission record.</p>
+              </div>
+              <div class="control-scientist-panel__actions">
+                <span class="classification" id="control-scientist-unread">0 NEW</span>
+                <button class="button button--secondary" type="button" data-route="scientist">Open science channel</button>
+              </div>
+            </section>
             <div class="page-actions">
               <button class="button button--secondary" type="button" data-action="back">← Back to rover design</button>
               <button class="button button--primary" type="button" data-route="challenge">Open challenge center <span aria-hidden="true">→</span></button>
@@ -795,28 +822,33 @@
                 <div class="panel__header">
                   <div>
                     <p class="eyebrow">INCOMING MESSAGE <span class="eyebrow__separator">/</span> LOCAL TRANSCRIPT</p>
-                    <h2 id="dialogue-title">Field science briefing</h2>
+                    <h2 id="dialogue-title">Science channel standing by</h2>
                   </div>
-                  <span class="classification">EDUCATIONAL CONTEXT</span>
+                  <span class="classification" id="dialogue-category">NO NEW MESSAGE</span>
                 </div>
                 <div class="dialogue-message">
-                  <span class="dialogue-message__speaker">DR. CHEN <span>· PLANETARY GEOLOGIST</span></span>
-                  <p>“A useful settlement site is more than a place to land. We need to understand the local materials, how the ground behaves, and what the environment will ask of a habitat and its crew.”</p>
-                  <p>“Our observations should help the engineering team ask better questions—not imply that we already know the answers.”</p>
+                  <span class="dialogue-message__speaker" id="dialogue-speaker">DR. CHEN</span>
+                  <p id="dialogue-context" class="dialogue-message__context">Mission science channel</p>
+                  <p id="dialogue-text"></p>
                 </div>
-                <section class="science-note" aria-labelledby="science-note-title">
-                  <p class="eyebrow">SCIENCE NOTE</p>
-                  <h3 id="science-note-title">Why study regolith?</h3>
-                  <p>Martian regolith is the loose material covering bedrock. Its grain size, cohesion, mineral content, and variability can matter to vehicle mobility, landing systems, construction concepts, and future resource studies. These properties must be measured at a site; this interface does not provide measurements.</p>
+                <section class="dialogue-history" aria-labelledby="dialogue-history-title">
+                  <div class="panel__header">
+                    <div>
+                      <p class="eyebrow">MISSION TRANSCRIPT</p>
+                      <h3 id="dialogue-history-title">Viewed messages</h3>
+                    </div>
+                  </div>
+                  <div id="dialogue-history" class="dialogue-history__list"></div>
                 </section>
                 <div class="dialogue-panel__footer">
-                  <span class="inline-status">Dialogue is a fixed educational preview.</span>
-                  <button class="button button--primary" type="button" data-route="results">Continue interaction <span aria-hidden="true">→</span></button>
+                  <span class="inline-status" id="scientist-action-status" role="status" aria-live="polite">Dialogue appears when mission facts satisfy configured triggers.</span>
+                  <button class="button button--primary" id="scientist-continue" type="button" data-action="scientist-continue" disabled>Continue dialogue <span aria-hidden="true">→</span></button>
                 </div>
               </article>
             </div>
             <div class="page-actions">
-              <button class="button button--secondary" type="button" data-action="back">← Back to field scenario</button>
+              <button class="button button--secondary" type="button" data-action="back">← Return to mission</button>
+              <button class="button button--quiet" type="button" data-route="results">Open mission results preview <span aria-hidden="true">→</span></button>
             </div>
           </section>
 
@@ -824,42 +856,54 @@
             <div class="page-heading">
               <div>
                 <p class="eyebrow">08 <span class="eyebrow__separator">/</span> MISSION DEBRIEF</p>
-                <h1 id="results-title">Mission results</h1>
-                <p class="page-heading__description">Results interface preview. No mission outcome has been generated or scored.</p>
+                <h1 id="results-title">Mission evaluation</h1>
+                <p class="page-heading__description">A transparent report generated from this mission's recorded operations and final resource state.</p>
               </div>
-              <span class="mission-status"><span class="status-dot status-dot--warning" aria-hidden="true"></span> EVALUATION PENDING</span>
+              <span class="mission-status" id="results-status"><span class="status-dot status-dot--warning" aria-hidden="true"></span> REPORT UNAVAILABLE</span>
             </div>
 
-            <section class="results-banner panel">
-              <div class="results-banner__symbol" aria-hidden="true">—</div>
+            <section class="results-banner panel" id="results-banner">
+              <div class="results-banner__symbol" id="results-grade">—</div>
               <div>
-                <p class="eyebrow">MISSION OUTCOME</p>
-                <h2>Awaiting mission simulation</h2>
-                <p>This build presents the debrief structure only. It does not determine success, failure, or a score.</p>
+                <p class="eyebrow" id="results-mission-name">MISSION OUTCOME</p>
+                <h2 id="results-score">Final report is generated after mission termination</h2>
+                <p id="results-assessment-summary">Active missions are not evaluated as final reports.</p>
               </div>
-              <span class="classification">NOT EVALUATED</span>
+              <span class="classification" id="results-report-reference">NOT EVALUATED</span>
             </section>
             <div class="results-grid">
-              <section class="panel results-panel" aria-labelledby="results-science-title">
-                <div class="panel__header"><div><p class="eyebrow">SCIENCE PROGRAM</p><h2 id="results-science-title">Objectives achieved</h2></div><span class="panel__index">04</span></div>
+              <section class="panel results-panel results-panel--wide" aria-labelledby="results-categories-title">
+                <div class="panel__header"><div><p class="eyebrow">TRANSPARENT SCORING</p><h2 id="results-categories-title">Category breakdown</h2></div><span class="panel__index">100 PTS</span></div>
+                <div id="results-category-scores" class="evaluation-category-list"></div>
+              </section>
+              <section class="panel results-panel" aria-labelledby="results-objectives-title">
+                <div class="panel__header"><div><p class="eyebrow">SCIENCE PROGRAM</p><h2 id="results-objectives-title">Mission objectives</h2></div></div>
                 <div id="results-objectives" class="results-objectives"></div>
               </section>
-              <section class="panel results-panel" aria-labelledby="resource-summary-title">
-                <div class="panel__header"><div><p class="eyebrow">MISSION INVENTORY</p><h2 id="resource-summary-title">Resource summary</h2></div><span class="panel__index">—</span></div>
-                <div class="summary-list">
-                  <div><span>Power</span><strong>Not simulated</strong></div>
-                  <div><span>Water & oxygen</span><strong>Not simulated</strong></div>
-                  <div><span>Science samples</span><strong>Not recorded</strong></div>
-                </div>
+              <section class="panel results-panel" aria-labelledby="results-resources-title">
+                <div class="panel__header"><div><p class="eyebrow">MISSION INVENTORY</p><h2 id="results-resources-title">Resources consumed / remaining</h2></div></div>
+                <div id="results-resources" class="summary-list"></div>
               </section>
-              <section class="panel results-panel results-panel--wide" aria-labelledby="engineering-title">
-                <div class="panel__header"><div><p class="eyebrow">VEHICLE REVIEW</p><h2 id="engineering-title">Engineering performance</h2></div><span class="panel__index">PREVIEW</span></div>
-                <div class="engineering-summary" id="engineering-summary"></div>
+              <section class="panel results-panel" aria-labelledby="results-operations-title">
+                <div class="panel__header"><div><p class="eyebrow">OPERATIONS</p><h2 id="results-operations-title">Challenges & exploration</h2></div></div>
+                <div id="results-operations" class="summary-list"></div>
+              </section>
+              <section class="panel results-panel" aria-labelledby="results-rover-title">
+                <div class="panel__header"><div><p class="eyebrow">VEHICLE REVIEW</p><h2 id="results-rover-title">Final rover condition</h2></div></div>
+                <div id="results-rover-condition" class="summary-list"></div>
               </section>
             </div>
-            <section class="panel evaluation-placeholder" aria-labelledby="evaluation-title">
-              <div class="evaluation-placeholder__mark" aria-hidden="true">E</div>
-              <div><p class="eyebrow">EVALUATION SUMMARY</p><h2 id="evaluation-title">Scoring system planned for a later phase</h2><p>No grades, points, or performance claims are produced by this interface foundation.</p></div>
+            <section class="panel evaluation-assessment" aria-labelledby="evaluation-title">
+              <div class="panel__header"><div><p class="eyebrow">FINAL SCIENCE ASSESSMENT</p><h2 id="evaluation-title">Dr. Chen</h2></div><span class="classification">SIMULATION REPORT</span></div>
+              <p id="results-final-assessment"></p>
+              <div class="evaluation-assessment__highlights">
+                <section><h3>Major successes</h3><div id="results-successes" class="summary-list"></div></section>
+                <section><h3>Major failures</h3><div id="results-failures" class="summary-list"></div></section>
+              </div>
+            </section>
+            <section class="panel evaluation-recommendations" aria-labelledby="recommendations-title">
+              <div class="panel__header"><div><p class="eyebrow">NEXT MISSION PLANNING</p><h2 id="recommendations-title">Recommendations</h2></div></div>
+              <div id="results-recommendations" class="evaluation-recommendation-list"></div>
             </section>
             <div class="page-actions">
               <button class="button button--secondary" type="button" data-route="briefing">Review mission briefing</button>

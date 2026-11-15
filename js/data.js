@@ -664,6 +664,12 @@ export const INITIAL_GAME_STATE = Object.freeze({
   }),
   resources: null,
   missionExecution: null,
+  missionEvaluation: null,
+  scientistDialogue: Object.freeze({
+    missionId: null,
+    unlocked: Object.freeze([]),
+    history: Object.freeze([]),
+  }),
   challengeProgress: Object.freeze(
     MISSION_CHALLENGES.map(({ id, status }) => Object.freeze({ id, status })),
   ),

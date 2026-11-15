@@ -48,6 +48,276 @@ function sumProperty(components, property) {
   return components.reduce((total, component) => total + (component[property] ?? 0), 0);
 }
 
+function objectiveCoverage(instrumentIds, objectiveIds) {
+  const instruments = new Set(instrumentIds);
+  const missing = [];
+  for (const objectiveId of objectiveIds) {
+    const requirement = SCIENCE_CAPABILITY_REQUIREMENTS.find(
+      ({ objectiveId: id }) => id === objectiveId,
+    );
+    if (!requirement) {
+      missing.push(`No science capability mapping exists for selected objective "${objectiveId}".`);
+      continue;
+    }
+    for (const capability of requirement.requiredCapabilities) {
+      if (!capability.instrumentIds.some((id) =>
+        instruments.has(id) && Boolean(getOption("instruments", id)))) {
+        missing.push(
+          `${capability.label} requires an available catalog instrument: ${capability.instrumentIds.join(" or ")}.`,
+        );
+      }
+    }
+  }
+  return missing;
+}
+
+function objectiveMappingIssues(objectiveIds) {
+  const issues = [];
+  for (const objectiveId of objectiveIds) {
+    const requirement = SCIENCE_CAPABILITY_REQUIREMENTS.find(
+      ({ objectiveId: id }) => id === objectiveId,
+    );
+    if (!requirement) {
+      issues.push(`No science capability mapping exists for selected objective "${objectiveId}".`);
+      continue;
+    }
+    for (const capability of requirement.requiredCapabilities) {
+      if (!capability.instrumentIds.some((id) => getOption("instruments", id))) {
+        issues.push(
+          `${capability.label} has no matching instrument in the component catalog.`,
+        );
+      }
+    }
+  }
+  return issues;
+}
+
+function instrumentSelections() {
+  const instruments = getCategory("instruments")?.options ?? [];
+  const selections = [];
+  for (let mask = 0; mask < 2 ** instruments.length; mask += 1) {
+    selections.push(instruments
+      .filter((_, index) => mask & (1 << index))
+      .map(({ id }) => id));
+  }
+  return selections;
+}
+
+function minimalCoveringInstrumentSelections(objectiveIds) {
+  const covering = instrumentSelections().filter((selection) =>
+    objectiveCoverage(selection, objectiveIds).length === 0,
+  );
+  return covering.filter((selection) =>
+    !covering.some((other) =>
+      other.length < selection.length && other.every((id) => selection.includes(id)),
+    ),
+  );
+}
+
+function componentExplanations(configuration, objectiveIds, selectedLandingSiteId) {
+  const site = LANDING_SITES.find(({ id }) => id === selectedLandingSiteId);
+  const instruments = configuration.instruments.map((id) => {
+    const option = getOption("instruments", id);
+    const capabilities = SCIENCE_CAPABILITY_REQUIREMENTS
+      .filter((objective) => objectiveIds.includes(objective.objectiveId))
+      .flatMap((objective) =>
+        objective.requiredCapabilities
+          .filter(({ instrumentIds }) => instrumentIds.includes(id))
+          .map(({ label }) => label),
+      );
+    const coveredObjectives = SCIENCE_CAPABILITY_REQUIREMENTS
+      .filter((objective) => objectiveIds.includes(objective.objectiveId)
+        && objective.requiredCapabilities.some(({ instrumentIds }) => instrumentIds.includes(id)))
+      .map(({ objectiveId }) =>
+        SCIENCE_OBJECTIVES.find(({ id }) => id === objectiveId)?.name ?? objectiveId,
+      );
+    return {
+      id,
+      name: option.name,
+      categoryId: "instruments",
+      explanation: `Needed for ${capabilities.join(", ")}${coveredObjectives.length
+        ? ` supporting ${coveredObjectives.join(" and ")}`
+        : ""}.`,
+    };
+  });
+  const selected = [
+    {
+      categoryId: "chassis",
+      id: configuration.chassis,
+      reason: "Provides the mass, payload, instrument-slot, and equipment-slot envelope needed by this build.",
+    },
+    {
+      categoryId: "mobility",
+      id: configuration.mobility,
+      reason: `Required mobility system; its terrain capability covers the selected site's ${site?.name ?? "landing-site"} terrain profile.`,
+    },
+    {
+      categoryId: "power",
+      id: configuration.power,
+      reason: "Required power source; its nominal generation satisfies the installed systems' power demand within the mission limits.",
+    },
+    {
+      categoryId: "communications",
+      id: configuration.communications,
+      reason: "Required communication system; it meets the minimum link capability and data-capacity limits.",
+    },
+    {
+      categoryId: "landing",
+      id: configuration.landing,
+      reason: "Required landing system; it completes the mandatory rover configuration within mass and budget limits.",
+    },
+    ...instruments.map(({ categoryId, id, explanation }) => ({
+      categoryId,
+      id,
+      reason: explanation,
+    })),
+  ];
+  return selected.map(({ categoryId, id, reason }) => ({
+    categoryId,
+    id,
+    name: getOption(categoryId, id)?.name ?? id,
+    explanation: reason,
+  }));
+}
+
+export function recommendRoverConfiguration(
+  objectiveIds = [],
+  selectedLandingSiteId,
+  limits = ENGINEERING_LIMITS,
+) {
+  const objectives = [...new Set(Array.isArray(objectiveIds) ? objectiveIds : [])];
+  const missingCapabilities = objectiveMappingIssues(objectives);
+  if (missingCapabilities.length) {
+    return {
+      isValid: false,
+      configuration: null,
+      metrics: null,
+      validation: null,
+      explanations: [],
+      reason: `No recommended rover can cover the selected objectives. ${missingCapabilities.join(" ")}`,
+      blockingConstraints: missingCapabilities,
+    };
+  }
+
+  const singleChoiceCategories = REQUIRED_COMPONENT_CATEGORIES;
+  const candidates = [];
+  const optionSets = singleChoiceCategories.map((categoryId) =>
+    getCategory(categoryId)?.options ?? [],
+  );
+  const siteTerrainTags = LANDING_SITES.find(({ id }) => id === selectedLandingSiteId)?.terrainTags ?? [];
+  const missingSystems = singleChoiceCategories
+    .filter((_, index) => optionSets[index].length === 0)
+    .map((categoryId) => getCategory(categoryId)?.title ?? categoryId);
+  if (missingSystems.length) {
+    const blockingConstraints = missingSystems.map((name) =>
+      `No catalog component is available for required ${name.toLowerCase()}.`,
+    );
+    return {
+      isValid: false,
+      configuration: null,
+      metrics: null,
+      validation: null,
+      explanations: [],
+      reason: `No recommended rover can be assembled. ${blockingConstraints.join(" ")}`,
+      blockingConstraints,
+    };
+  }
+  const compatibleMobility = optionSets[1].some(({ terrainCapabilities = [] }) =>
+    siteTerrainTags.every((tag) => terrainCapabilities.includes(tag)),
+  );
+  if (!compatibleMobility) {
+    const blockingConstraints = [
+      `No catalog mobility system covers all required terrain tags for ${LANDING_SITES.find(({ id }) => id === selectedLandingSiteId)?.name ?? "the selected site"}: ${siteTerrainTags.join(", ")}.`,
+    ];
+    return {
+      isValid: false,
+      configuration: null,
+      metrics: null,
+      validation: null,
+      explanations: [],
+      reason: `No recommended rover can satisfy the selected-site mobility requirement. ${blockingConstraints[0]}`,
+      blockingConstraints,
+    };
+  }
+
+  for (const selectedInstruments of minimalCoveringInstrumentSelections(objectives)) {
+    for (const chassis of optionSets[0]) {
+      for (const mobility of optionSets[1]) {
+        if (!siteTerrainTags.every((tag) => mobility.terrainCapabilities?.includes(tag))) continue;
+        for (const power of optionSets[2]) {
+          for (const communications of optionSets[3]) {
+            for (const landing of optionSets[4]) {
+              const configuration = {
+                chassis: chassis.id,
+                mobility: mobility.id,
+                power: power.id,
+                communications: communications.id,
+                landing: landing.id,
+                instruments: selectedInstruments,
+              };
+              const validation = validateRoverConfiguration(configuration, limits, {
+                selectedLandingSiteId,
+                objectiveIds: objectives,
+              });
+              const metrics = calculateRoverMetrics(configuration, {
+                limits,
+                selectedLandingSiteId,
+              });
+              candidates.push({
+                configuration,
+                validation,
+                metrics,
+                cost: metrics.totalCostCredits,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  candidates.sort((left, right) => left.cost - right.cost);
+  const best = candidates.find(({ validation }) => validation.isValid);
+  if (best) {
+    return {
+      ...best,
+      isValid: true,
+      explanations: componentExplanations(best.configuration, objectives, selectedLandingSiteId),
+      reason: `Selected the least expensive valid catalog configuration for ${objectives.length
+        ? objectiveNames(objectives)
+        : "the required rover systems"}.`,
+      blockingConstraints: [],
+    };
+  }
+
+  const nearest = candidates
+    .map((candidate) => ({
+      ...candidate,
+      violations: candidate.validation.errors.length,
+    }))
+    .sort((left, right) => left.violations - right.violations || left.cost - right.cost)[0];
+  const blockingConstraints = [...new Set(
+    nearest?.validation.errors.map(({ message }) => message) ?? [],
+  )];
+  return {
+    isValid: false,
+    configuration: null,
+    metrics: nearest?.metrics ?? null,
+    validation: nearest?.validation ?? null,
+    explanations: [],
+    reason: blockingConstraints.length
+      ? `No valid rover configuration fits the selected objectives and engineering limits. Closest catalog build is blocked by: ${blockingConstraints.join(" ")}`
+      : "No catalog configuration is available for the required rover systems.",
+    blockingConstraints,
+  };
+}
+
+function objectiveNames(objectiveIds) {
+  return objectiveIds.map((id) =>
+    SCIENCE_OBJECTIVES.find(({ id: objectiveId }) => objectiveId === id)?.name ?? id,
+  ).join(", ");
+}
+
 export function calculateRoverMass(configuration) {
   return round(sumProperty(getInstalledComponents(configuration), "massKg"));
 }

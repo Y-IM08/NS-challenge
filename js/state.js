@@ -39,6 +39,15 @@ import {
   selectMissionDestination as selectExecutionDestination,
   updateMissionPowerEnvironment,
 } from "./mission.js";
+import {
+  getAvailableScientistDialogues as availableDialoguesForState,
+  getNextScientistDialogue as getNextDialogue,
+  getScientistDialogueHistory as getDialogueHistory,
+  initializeScientistDialogue,
+  markScientistDialogueViewed,
+  synchronizeScientistDialogue,
+} from "./scientist.js";
+import { evaluateMission } from "./evaluation.js";
 
 const VALID_SCREENS = new Set([
   "home",
@@ -59,12 +68,12 @@ const VALID_SCREENS = new Set([
 const TRANSITIONS = Object.freeze({
   home: new Set(["briefing", "archive", "how-to", "settings", "credits"]),
   briefing: new Set(["roles", "archive"]),
-  roles: new Set(["briefing", "planning"]),
-  planning: new Set(["roles", "rover"]),
-  rover: new Set(["planning", "control"]),
-  control: new Set(["rover", "challenge"]),
+  roles: new Set(["briefing", "planning", "scientist"]),
+  planning: new Set(["roles", "rover", "scientist"]),
+  rover: new Set(["planning", "control", "scientist"]),
+  control: new Set(["rover", "challenge", "scientist", "results"]),
   challenge: new Set(["control", "scientist"]),
-  scientist: new Set(["challenge", "results"]),
+  scientist: new Set(["roles", "planning", "rover", "control", "challenge", "results"]),
   results: new Set(["briefing"]),
   archive: new Set(["briefing"]),
   "how-to": new Set(),
@@ -93,6 +102,22 @@ function publish(nextState) {
     nextState = {
       ...nextState,
       missionPlan: buildMissionPlan(configuration, nextState.rover),
+    };
+  }
+  nextState = {
+    ...nextState,
+    scientistDialogue: synchronizeScientistDialogue(
+      nextState.scientistDialogue ?? initializeScientistDialogue(),
+      nextState,
+    ),
+  };
+  if (
+    !nextState.missionEvaluation
+    && ["COMPLETED", "ABORTED", "FAILED"].includes(nextState.missionExecution?.status)
+  ) {
+    nextState = {
+      ...nextState,
+      missionEvaluation: evaluateMission(nextState),
     };
   }
   state = freezeDeep(nextState);
@@ -162,6 +187,9 @@ export function navigateTo(screen) {
   }
   if (screen === "control" && !state.currentMissionId) {
     throw new Error("Accept a mission briefing before opening mission control.");
+  }
+  if (screen === "scientist" && !state.currentMissionId) {
+    throw new Error("Accept a mission before opening Dr. Chen's science channel.");
   }
   if (screen === "control") {
     const validation = validateRoverConfiguration(state.rover, undefined, {
@@ -234,6 +262,7 @@ export function selectMission(missionId) {
     missionPlan: null,
     resources: null,
     missionExecution: null,
+    missionEvaluation: null,
     screen: "briefing",
     screenHistory: [...state.screenHistory, state.screen],
   });
@@ -255,6 +284,8 @@ export function acceptMission() {
     },
     resources: null,
     missionExecution: null,
+    missionEvaluation: null,
+    scientistDialogue: initializeScientistDialogue(state.selectedMissionId),
     screen: "roles",
     screenHistory: [...state.screenHistory, state.screen],
   });
@@ -597,6 +628,32 @@ export function selectPowerEnvironment(environmentId) {
 export function getActiveChallenges() {
   requireMissionControl();
   return Object.freeze(getExecutionActiveChallenges(state.missionExecution));
+}
+
+export function getAvailableScientistDialogues() {
+  return availableDialoguesForState(state.scientistDialogue);
+}
+
+export function getCurrentScientistDialogue() {
+  return getNextDialogue(state.scientistDialogue);
+}
+
+export function getScientistDialogueHistory() {
+  return getDialogueHistory(state.scientistDialogue);
+}
+
+export function advanceScientistDialogue(dialogueId) {
+  if (state.screen !== "scientist" || !state.currentMissionId) {
+    throw new Error("Scientist dialogue can only advance from an accepted mission's science channel.");
+  }
+  const currentDialogue = getNextDialogue(state.scientistDialogue);
+  if (!currentDialogue || currentDialogue.dialogueId !== dialogueId) {
+    throw new Error(`Scientist dialogue is not the current available message: ${dialogueId}.`);
+  }
+  return publish({
+    ...state,
+    scientistDialogue: markScientistDialogueViewed(state.scientistDialogue, dialogueId),
+  });
 }
 
 export function getChallengeHistory() {

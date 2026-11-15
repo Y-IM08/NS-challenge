@@ -16,6 +16,7 @@ import {
   calculateRoverMass,
   calculateRoverMetrics,
   getScientificCapabilities,
+  recommendRoverConfiguration,
   validateRoverConfiguration,
 } from "../js/rover.js";
 
@@ -145,6 +146,81 @@ test("a complete illustrative rover configuration satisfies mandatory constraint
   assert.ok(metrics.powerMarginW >= 0);
   assert.ok(metrics.payloadRemainingKg >= 0);
   assert.ok(metrics.scientificCapabilities.every(({ coverageStatus }) => coverageStatus === "ready"));
+});
+
+test("recommended rover builds a least-cost valid configuration for selected objectives", () => {
+  const recommendation = recommendRoverConfiguration(["minerals"], "jezero");
+  assert.equal(recommendation.isValid, true, recommendation.reason);
+  assert.equal(recommendation.validation.isValid, true);
+  assert.deepEqual(recommendation.configuration, {
+    chassis: "scout",
+    mobility: "advanced-suspension",
+    power: "solar",
+    communications: "basic",
+    landing: "basic",
+    instruments: ["spectrometer"],
+  });
+  assert.ok(recommendation.metrics.totalCostCredits <= ENGINEERING_LIMITS.maxConstructionBudgetCredits);
+  assert.ok(recommendation.metrics.totalMassKg <= ENGINEERING_LIMITS.maxRoverMassKg);
+  assert.ok(recommendation.metrics.payloadRemainingKg >= 0);
+  assert.ok(recommendation.metrics.powerMarginW >= 0);
+  assert.ok(recommendation.metrics.instrumentSlotsUsed <= recommendation.metrics.instrumentSlotsAvailable);
+  assert.ok(recommendation.metrics.equipmentSlotsUsed <= recommendation.metrics.equipmentSlotsAvailable);
+  assert.ok(recommendation.metrics.powerGenerationW <= ENGINEERING_LIMITS.maxPowerGenerationW);
+  assert.equal(recommendation.configuration.instruments.length, 1);
+  assert.equal(recommendation.configuration.instruments[0], "spectrometer");
+  assert.ok(recommendation.explanations.some(({ id, explanation }) =>
+    id === "spectrometer" && /mineral identification/i.test(explanation)));
+  assert.ok(recommendation.configuration);
+});
+
+test("recommended rover shares an instrument across selected objectives", () => {
+  const recommendation = recommendRoverConfiguration(["regolith", "agriculture"], "jezero");
+  assert.equal(recommendation.isValid, true, recommendation.reason);
+  assert.equal(
+    recommendation.configuration.instruments.filter((id) => id === "soil-analyzer").length,
+    1,
+  );
+  assert.ok(recommendation.configuration.instruments.includes("ground-penetrating-radar"));
+  assert.ok(recommendation.explanations.find(({ id }) => id === "soil-analyzer")
+    .explanation.includes("Regolith chemistry indicators"));
+  assert.ok(recommendation.explanations.find(({ id }) => id === "soil-analyzer")
+    .explanation.includes("Soil/regolith characterization"));
+});
+
+test("recommended build reports budget and mass blockers from engineering validation", () => {
+  const overBudget = recommendRoverConfiguration(
+    ["minerals"],
+    "jezero",
+    { ...ENGINEERING_LIMITS, maxConstructionBudgetCredits: 1 },
+  );
+  assert.equal(overBudget.isValid, false);
+  assert.ok(overBudget.blockingConstraints.some((message) => /construction cost/i.test(message)));
+
+  const overMass = recommendRoverConfiguration(
+    ["minerals"],
+    "jezero",
+    { ...ENGINEERING_LIMITS, maxRoverMassKg: 1 },
+  );
+  assert.equal(overMass.isValid, false);
+  assert.ok(overMass.blockingConstraints.some((message) => /rover mass/i.test(message)));
+});
+
+test("recommended build explains missing objective capability mappings", () => {
+  const recommendation = recommendRoverConfiguration(["unmapped-objective"], "jezero");
+  assert.equal(recommendation.isValid, false);
+  assert.match(recommendation.reason, /No science capability mapping exists/);
+});
+
+test("recommended build names exact engineering constraints when no configuration is valid", () => {
+  const recommendation = recommendRoverConfiguration(
+    ["minerals"],
+    "jezero",
+    { ...ENGINEERING_LIMITS, maxPowerGenerationW: 1 },
+  );
+  assert.equal(recommendation.isValid, false);
+  assert.ok(recommendation.blockingConstraints.some((message) => /Power generation/.test(message)));
+  assert.match(recommendation.reason, /blocked by/);
 });
 
 test("instrument slot and payload boundaries are enforced", () => {

@@ -47,6 +47,7 @@ import {
 import {
   calculateRoverMetrics,
   getScientificCapabilities,
+  recommendRoverConfiguration,
   validateRoverConfiguration,
 } from "./rover.js";
 import {
@@ -67,8 +68,13 @@ import {
   resolveChallenge,
   resumeMission,
   selectMissionDestination,
+  advanceScientistDialogue,
+  getAvailableScientistDialogues,
+  getCurrentScientistDialogue,
+  getScientistDialogueHistory,
 } from "./state.js";
 import { validatePlanningInputs } from "./planning.js";
+import { SCIENTIST_CHANNEL_EMPTY_MESSAGE } from "./scientist.js";
 
 const SCREEN_TITLES = Object.freeze({
   home: "Main menu",
@@ -102,6 +108,8 @@ let skipLoadingSequence = completeLoading;
 let lastRenderedScreen = null;
 let resourceActionError = "";
 let executionActionError = "";
+let roverRecommendation = null;
+let roverRecommendationContext = null;
 
 function makeElement(tagName, className, text) {
   const element = document.createElement(tagName);
@@ -519,6 +527,14 @@ function renderRover(state) {
   const container = document.querySelector("#rover-categories");
   const objectiveIds = state.missionPlan?.configuration.objectivePriorities
     .map(({ objectiveId }) => objectiveId) ?? [];
+  const recommendationContext = JSON.stringify({
+    objectiveIds,
+    landingSiteId: state.selectedLandingSiteId,
+  });
+  if (roverRecommendationContext && roverRecommendationContext !== recommendationContext) {
+    roverRecommendation = null;
+    roverRecommendationContext = null;
+  }
   const metrics = calculateRoverMetrics(state.rover, {
     selectedLandingSiteId: state.selectedLandingSiteId,
   });
@@ -527,6 +543,19 @@ function renderRover(state) {
     objectiveIds,
   });
   const missionValidation = state.missionPlan?.validation;
+  const recommendationStatus = document.querySelector("#rover-recommendation-status");
+  const recommendationButton = document.querySelector("#build-recommended-rover");
+  recommendationButton.disabled = Boolean(state.resources);
+  recommendationButton.setAttribute("aria-describedby", "rover-recommendation-status");
+  recommendationButton.title = state.resources
+    ? "Rover configuration is locked after mission operations begin."
+    : "Select the least expensive valid catalog rover for the selected science objectives.";
+  document.querySelector('[data-action="reset-rover"]').disabled = Boolean(state.resources);
+  recommendationStatus.textContent = roverRecommendation?.reason
+    ?? "Select objectives in mission planning, then build a recommended configuration or choose components manually.";
+  recommendationStatus.dataset.status = roverRecommendation
+    ? roverRecommendation.isValid ? "normal" : "critical"
+    : "info";
   const formatCredits = (value) => `${Math.round(value).toLocaleString()} cr`;
   const formatMass = (value) => `${value.toFixed(1)} kg`;
   const formatPower = (value) => `${value.toFixed(1)} W`;
@@ -672,6 +701,7 @@ function renderRover(state) {
             ? `${selected ? "Remove" : "Install"} ${option.name}`
             : `Select ${option.name}`,
         );
+        button.disabled = Boolean(state.resources);
         button.append(makeElement("strong", "", `${selected && category.id === "instruments" ? "✓ " : ""}${option.name}`));
         button.append(makeElement("small", "", option.detail));
         if (option.purpose) {
@@ -709,12 +739,49 @@ function renderRover(state) {
             button.append(makeElement("span", "rover-option__capabilities", `Supports objectives: ${objectiveLabels.join(", ")}`));
           }
         }
+        const explanation = roverRecommendation?.explanations.find(
+          ({ categoryId: recommendedCategory, id }) =>
+            recommendedCategory === category.id && id === option.id,
+        );
+        if (explanation) {
+          const reason = makeElement(
+            "span",
+            "rover-option__recommendation",
+            `Recommended · Why is this component needed? ${explanation.explanation}`,
+          );
+          reason.id = `rover-recommendation-${category.id}-${option.id}`;
+          button.setAttribute("aria-describedby", reason.id);
+          button.append(reason);
+        }
         options.append(button);
       });
       section.append(options);
       return section;
     }),
   );
+}
+
+function buildRecommendedRover(state) {
+  const objectiveIds = state.missionPlan?.configuration.objectivePriorities
+    .map(({ objectiveId }) => objectiveId) ?? [];
+  roverRecommendationContext = JSON.stringify({
+    objectiveIds,
+    landingSiteId: state.selectedLandingSiteId,
+  });
+  roverRecommendation = recommendRoverConfiguration(
+    objectiveIds,
+    state.selectedLandingSiteId,
+    ENGINEERING_LIMITS,
+  );
+  if (!roverRecommendation.isValid) return roverRecommendation;
+  resetRoverConfiguration();
+  for (const categoryId of ["chassis", "mobility", "power", "communications", "landing"]) {
+    selectRoverOption(categoryId, roverRecommendation.configuration[categoryId]);
+  }
+  for (const instrumentId of roverRecommendation.configuration.instruments) {
+    selectRoverOption("instruments", instrumentId);
+  }
+  return roverRecommendation;
 }
 
 function renderControl(state) {
@@ -725,6 +792,12 @@ function renderControl(state) {
     throw new Error("Mission control requires initialized mission execution state.");
   }
   const execution = state.missionExecution;
+  const scientistDialogue = getCurrentScientistDialogue();
+  document.querySelector("#control-scientist-copy").textContent = scientistDialogue
+    ? `${scientistDialogue.category.replaceAll("_", " ")} · ${scientistDialogue.text}`
+    : "Dr. Chen is monitoring the mission record. No new science message is available yet.";
+  document.querySelector("#control-scientist-unread").textContent =
+    `${getAvailableScientistDialogues().length} NEW`;
   const site = LANDING_SITES.find(({ id }) => id === state.selectedLandingSiteId);
   document.querySelector("#control-site-name").textContent = site?.name.toUpperCase() ?? "SITE PREVIEW";
   document.querySelector("#control-site-coordinates").textContent = site?.coordinates ?? "COORDINATES UNAVAILABLE";
@@ -1195,59 +1268,222 @@ function renderChallengeCenter(state, prefix) {
   );
 }
 
-function renderScientist() {
+function renderScientist(state) {
   document.querySelector("#scientist-name").textContent = SCIENTIST_PROFILE.name;
   document.querySelector("#scientist-role").textContent = SCIENTIST_PROFILE.role;
   document.querySelector("#scientist-affiliation").textContent = SCIENTIST_PROFILE.affiliation;
+  const dialogue = getCurrentScientistDialogue();
+  const history = getScientistDialogueHistory();
+  const category = document.querySelector("#dialogue-category");
+  const speaker = document.querySelector("#dialogue-speaker");
+  const title = document.querySelector("#dialogue-title");
+  const text = document.querySelector("#dialogue-text");
+  const context = document.querySelector("#dialogue-context");
+  const continueButton = document.querySelector("#scientist-continue");
+  const status = document.querySelector("#scientist-action-status");
+  if (dialogue) {
+    category.textContent = dialogue.category.replaceAll("_", " ");
+    speaker.textContent = dialogue.speaker.toUpperCase();
+    title.textContent = `${dialogue.missionStage.replaceAll("-", " ")} · ${history.length + 1}`;
+    text.textContent = dialogue.text;
+    context.textContent = dialogue.contextLabel;
+    continueButton.disabled = false;
+    continueButton.dataset.dialogueId = dialogue.dialogueId;
+    status.textContent = "New mission-context message";
+  } else {
+    category.textContent = "NO NEW MESSAGE";
+    speaker.textContent = SCIENTIST_PROFILE.name.toUpperCase();
+    title.textContent = "Science channel standing by";
+    text.textContent = SCIENTIST_CHANNEL_EMPTY_MESSAGE;
+    context.textContent = state.currentMissionId
+      ? MISSION_CATALOG.find(({ id }) => id === state.currentMissionId)?.title ?? "Mission science channel"
+      : "No mission accepted";
+    continueButton.disabled = true;
+    delete continueButton.dataset.dialogueId;
+    status.textContent = "Dialogue appears when mission facts satisfy configured triggers.";
+  }
+  const historyContainer = document.querySelector("#dialogue-history");
+  historyContainer.replaceChildren(
+    ...(history.length
+      ? [...history].reverse().map((entry) => {
+        const item = makeElement("article", "dialogue-history-entry");
+        item.append(makeElement("strong", "", entry.category.replaceAll("_", " ")));
+        item.append(makeElement("span", "", entry.contextLabel));
+        item.append(makeElement("p", "", entry.text));
+        return item;
+      })
+      : [makeElement("p", "inline-status", "Viewed dialogue will be recorded here.")]),
+  );
 }
 
 function renderResults(state) {
-  const metrics = calculateRoverMetrics(state.rover, {
-    selectedLandingSiteId: state.selectedLandingSiteId,
-  });
-  document.querySelector("#results-objectives").replaceChildren(
-    ...SCIENCE_OBJECTIVES.map((objective) => {
-      const row = makeElement("div", "results-objective");
-      row.append(makeElement("span", "results-objective__number", objective.number));
-      row.append(makeElement("strong", "", objective.name));
-      row.append(makeElement("small", "", "Not assessed"));
-      return row;
+  const report = state.missionEvaluation;
+  const status = document.querySelector("#results-status");
+  const categoryContainer = document.querySelector("#results-category-scores");
+  const objectivesContainer = document.querySelector("#results-objectives");
+  const resourcesContainer = document.querySelector("#results-resources");
+  const operationsContainer = document.querySelector("#results-operations");
+  const roverContainer = document.querySelector("#results-rover-condition");
+  const recommendationContainer = document.querySelector("#results-recommendations");
+  const successContainer = document.querySelector("#results-successes");
+  const failureContainer = document.querySelector("#results-failures");
+  if (!report) {
+    status.textContent = "REPORT UNAVAILABLE";
+    document.querySelector("#results-mission-name").textContent =
+      state.missionExecution?.missionName ?? "MISSION OUTCOME";
+    document.querySelector("#results-score").textContent =
+      "A final report is generated after mission termination";
+    document.querySelector("#results-assessment-summary").textContent =
+      "Active missions are not evaluated as final reports.";
+    document.querySelector("#results-grade").textContent = "—";
+    document.querySelector("#results-report-reference").textContent = "NOT EVALUATED";
+    document.querySelector("#results-final-assessment").textContent = "";
+    for (const container of [
+      categoryContainer,
+      objectivesContainer,
+      resourcesContainer,
+      operationsContainer,
+      roverContainer,
+      recommendationContainer,
+      successContainer,
+      failureContainer,
+    ]) {
+      container.replaceChildren();
+    }
+    return;
+  }
+
+  const statusLabel = report.missionStatus.toUpperCase();
+  status.textContent = `MISSION ${statusLabel}`;
+  status.dataset.status = report.missionStatus === "COMPLETED" ? "normal" : "warning";
+  document.querySelector("#results-mission-name").textContent = report.missionName;
+  document.querySelector("#results-score").textContent =
+    `${report.finalScore} / 100 · Grade ${report.grade}`;
+  document.querySelector("#results-assessment-summary").textContent =
+    `${report.missionStatus} · ${report.missionDuration.elapsedHours.toFixed(1)} h elapsed`;
+  document.querySelector("#results-grade").textContent = report.grade;
+  document.querySelector("#results-report-reference").textContent =
+    report.evaluationTimestamp ?? report.reportId;
+  document.querySelector("#results-final-assessment").textContent =
+    report.finalAssessment.text;
+
+  categoryContainer.replaceChildren(
+    ...Object.entries(report.categoryScores).map(([id, category]) => {
+      const item = makeElement("article", "evaluation-category");
+      item.dataset.category = id;
+      const heading = makeElement("div", "evaluation-category__heading");
+      heading.append(makeElement("strong", "", category.label));
+      heading.append(makeElement("span", "", `${category.score} / ${category.maxScore}`));
+      item.append(heading);
+      const progress = makeElement("progress", "evaluation-category__progress");
+      progress.max = category.maxScore;
+      progress.value = category.score;
+      progress.setAttribute("aria-label", `${category.label}: ${category.score} of ${category.maxScore}`);
+      item.append(progress);
+      item.append(makeElement("small", "", category.basis));
+      return item;
     }),
   );
+  const objectiveRows = [
+    ...report.objectivesCompleted.map((objective) => ({ ...objective, status: "COMPLETED" })),
+    ...report.objectivesIncomplete.map((objective) => ({ ...objective, status: objective.status.toUpperCase() })),
+  ];
+  objectivesContainer.replaceChildren(
+    ...(objectiveRows.length
+      ? objectiveRows.map((objective) => {
+        const row = makeElement("div", "results-objective");
+        row.append(makeElement("strong", "", objective.name));
+        row.append(makeElement("small", "", objective.status));
+        return row;
+      })
+      : [makeElement("p", "inline-status", "No selected mission objectives were recorded.")]),
+  );
 
-  const rover = ROVER_CATEGORIES.flatMap((category) => {
-    const selectedIds = category.id === "instruments"
-      ? state.rover.instruments
-      : state.rover[category.id] ? [state.rover[category.id]] : [];
-    if (selectedIds.length === 0) {
-      return [{ title: category.title, option: "No concept selected" }];
-    }
-    return selectedIds.map((id) => ({
-      title: category.title,
-      option: findRoverOption(category.id, id)?.name ?? "Unknown component",
-    }));
-  });
-  const engineering = document.querySelector("#engineering-summary");
-  engineering.replaceChildren(
-    ...[
-      { title: "Total rover mass", option: `${metrics.totalMassKg.toFixed(1)} kg` },
-      { title: "Construction cost", option: `${metrics.totalCostCredits.toLocaleString()} credits` },
-      { title: "Power generation / demand", option: `${metrics.powerGenerationW.toFixed(1)} / ${metrics.powerConsumptionW.toFixed(1)} W` },
-      { title: "Power margin", option: `${metrics.powerMarginW.toFixed(1)} W` },
-      { title: "Payload remaining", option: metrics.payloadRemainingKg === null ? "No chassis selected" : `${metrics.payloadRemainingKg.toFixed(1)} kg` },
-      { title: "Average component reliability index", option: metrics.reliability === null ? "No components" : `${(metrics.reliability * 100).toFixed(1)}%` },
-    ].map(({ title, option }) => {
-      const item = makeElement("div", "engineering-summary__metric");
-      item.append(makeElement("span", "", title));
-      item.append(makeElement("strong", "", option));
-      return item;
-    }),
-    ...rover.map(({ title, option }) => {
-      const item = makeElement("div");
-      item.append(makeElement("span", "", title));
-      item.append(makeElement("strong", "", option));
-      return item;
-    }),
+  const resourceRows = [
+    ["Time consumed", `${report.resourcesConsumed.timeHours.toFixed(1)} h`],
+    ["Time remaining", `${report.resourcesRemaining.timeHours.toFixed(1)} h`],
+    ["Energy consumed", `${report.resourcesConsumed.energyWh.toFixed(0)} Wh`],
+    ["Battery remaining", `${report.resourcesRemaining.batteryWh.toFixed(0)} / ${report.resourcesRemaining.batteryCapacityWh.toFixed(0)} Wh (${Math.round(report.resourcesRemaining.batteryFraction * 100)}%)`],
+    ["Budget spent", `${report.resourcesConsumed.budgetCredits.toFixed(0)} credits`],
+    ["Budget remaining", `${report.resourcesRemaining.budgetCredits.toFixed(0)} credits`],
+    ["Data generated / transmitted", `${report.resourcesConsumed.dataGeneratedMB.toFixed(1)} / ${report.resourcesConsumed.dataTransmittedMB.toFixed(1)} MB`],
+    ["Data still stored", `${report.resourcesRemaining.dataStoredMB.toFixed(1)} MB`],
+    ["Mission duration", `${report.missionDuration.elapsedSols.toFixed(2)} / ${report.missionDuration.plannedHours.toFixed(1)} h planned`],
+    ["Observations / samples", `${report.scientificObservations.length} / ${report.samplesCollected.length}`],
+  ];
+  resourcesContainer.replaceChildren(...resourceRows.map(([label, value]) => {
+    const row = makeElement("div");
+    row.append(makeElement("span", "", label));
+    row.append(makeElement("strong", "", value));
+    return row;
+  }));
+
+  const operationRows = [
+    ["Challenges encountered / resolved", `${report.challengesEncountered.length} / ${report.challengesResolved.length}`],
+    ["Equipment failures / recoveries", `${report.equipmentFailures.length} / ${report.equipmentRecoveries.length}`],
+    ["Challenge performance", report.challengePerformance
+      ? `${report.challengePerformance.performanceScore} / 100`
+      : "No challenge evaluation recorded"],
+    ["Waypoints explored", `${report.explorationProgress.waypointsReached.length} / ${report.explorationProgress.totalWaypoints}`],
+    ["Locations for completion", `${report.explorationProgress.waypointsReached.length} / ${report.explorationProgress.requiredWaypoints} required`],
+    ["Locations", report.explorationProgress.waypointsReached.map(({ name }) => name).join(", ") || "None recorded"],
+  ];
+  operationsContainer.replaceChildren(...operationRows.map(([label, value]) => {
+    const row = makeElement("div");
+    row.append(makeElement("span", "", label));
+    row.append(makeElement("strong", "", String(value)));
+    return row;
+  }));
+
+  const condition = report.roverCondition;
+  const roverRows = condition
+    ? [
+      ["Wheels", condition.wheels],
+      ["Communications", condition.communications],
+      ...Object.entries(condition.instruments ?? {}),
+      ["Power generation", `${Math.round(condition.powerGenerationFactor * 100)}%`],
+      ["Operating mode", condition.operatingMode],
+    ]
+    : [];
+  roverContainer.replaceChildren(
+    ...(roverRows.length
+      ? roverRows.map(([name, value]) => {
+        const row = makeElement("div");
+        row.append(makeElement("span", "", name));
+        row.append(makeElement("strong", "", String(value).toUpperCase()));
+        return row;
+      })
+      : [makeElement("p", "inline-status", "No rover-condition record is available.")]),
+  );
+
+  successContainer.replaceChildren(
+    ...(report.finalAssessment.majorSuccesses.length
+      ? report.finalAssessment.majorSuccesses.map((success) => {
+        const row = makeElement("div");
+        row.append(makeElement("span", "", success));
+        return row;
+      })
+      : [makeElement("p", "inline-status", "No category met the major-success threshold.")]),
+  );
+  failureContainer.replaceChildren(
+    ...(report.finalAssessment.majorFailures.length
+      ? report.finalAssessment.majorFailures.map((failure) => {
+        const row = makeElement("div");
+        row.append(makeElement("span", "", failure));
+        return row;
+      })
+      : [makeElement("p", "inline-status", "No major failure was recorded.")]),
+  );
+  recommendationContainer.replaceChildren(
+    ...(report.recommendations.length
+      ? report.recommendations.map((recommendation) => {
+        const item = makeElement("article", "evaluation-recommendation");
+        item.dataset.priority = recommendation.priority;
+        item.append(makeElement("strong", "", recommendation.title));
+        item.append(makeElement("p", "", recommendation.detail));
+        return item;
+      })
+      : [makeElement("p", "inline-status", "No recommendations were generated.")]),
   );
 }
 
@@ -1284,6 +1520,14 @@ function render(state) {
   document.querySelector("#reduce-motion").checked = state.preferences.reduceMotion;
   document.querySelector("#app-shell").classList.toggle("app-shell--reduced-motion", state.preferences.reduceMotion);
   renderStageNavigation(state.screen);
+  const scientistLink = document.querySelector("#scientist-channel-link");
+  const unreadDialogues = state.scientistDialogue?.unlocked.filter(
+    ({ displayStatus }) => displayStatus === "AVAILABLE",
+  ).length ?? 0;
+  scientistLink.hidden = !state.currentMissionId
+    || ["briefing", "scientist", "results"].includes(state.screen);
+  document.querySelector("#scientist-unread-count").textContent =
+    `${unreadDialogues} NEW`;
 
   if (state.screen === "briefing") renderBriefing(state);
   if (state.screen === "roles") renderRoleSlots(state);
@@ -1291,7 +1535,7 @@ function render(state) {
   if (state.screen === "rover") renderRover(state);
   if (state.screen === "control") renderControl(state);
   if (state.screen === "challenge") renderChallengeCenter(state, "field");
-  if (state.screen === "scientist") renderScientist();
+  if (state.screen === "scientist") renderScientist(state);
   if (state.screen === "results") renderResults(state);
 
   if (state.loadingComplete && !loadingExitStarted) {
@@ -1333,6 +1577,16 @@ function handleClick(event) {
           status.dataset.status = "critical";
         }
       }
+    }
+    return;
+  }
+
+  if (target.dataset.action === "scientist-continue") {
+    try {
+      advanceScientistDialogue(target.dataset.dialogueId);
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      document.querySelector("#scientist-action-status").textContent = error.message;
     }
     return;
   }
@@ -1420,7 +1674,22 @@ function handleClick(event) {
     returnToMenu();
   } else if (target.dataset.action === "restart") {
     resetMission();
+  } else if (target.dataset.action === "build-recommended-rover") {
+    try {
+      const recommendation = buildRecommendedRover(getState());
+      if (!recommendation.isValid) renderRover(getState());
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      roverRecommendation = {
+        isValid: false,
+        reason: error.message,
+        explanations: [],
+      };
+      renderRover(getState());
+    }
   } else if (target.dataset.action === "reset-rover") {
+    roverRecommendation = null;
+    roverRecommendationContext = null;
     resetRoverConfiguration();
   } else if (target.dataset.missionId) {
     selectMission(target.dataset.missionId);
@@ -1435,6 +1704,8 @@ function handleClick(event) {
     selectMissionStrategy(target.dataset.strategyId);
     document.querySelector(`[data-strategy-id="${target.dataset.strategyId}"]`)?.focus();
   } else if (target.dataset.roverCategory && target.dataset.roverOption) {
+    roverRecommendation = null;
+    roverRecommendationContext = null;
     selectRoverOption(target.dataset.roverCategory, target.dataset.roverOption);
   } else if (target.dataset.route) {
     navigateTo(target.dataset.route);

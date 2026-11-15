@@ -2,7 +2,7 @@
 
 ## Purpose and current phase
 
-MARSBOUND is an educational Mars mission-design simulator. The app provides a complete visual screen architecture and a single-device navigation foundation for up to four local player slots. Mission Planning stores and validates a structured mission plan and estimates selected resource use. The Rover Design Studio calculates and validates an illustrative engineering configuration. Mission Control runs deterministic waypoint movement, sample collection, capability-specific scientific observations, communications, resource accounting, and challenge consequences. Challenges have a configured educational performance indicator; no real rover physics, scientific results, mission-success score, or online play is simulated.
+MARSBOUND is an educational Mars mission-design simulator. The app provides a complete visual screen architecture and a single-device navigation foundation for up to four local player slots. Mission Planning stores and validates a structured mission plan and estimates selected resource use. The Rover Design Studio calculates and validates an illustrative engineering configuration. Mission Control runs deterministic waypoint movement, sample collection, capability-specific scientific observations, communications, resource accounting, challenge consequences, and progressive context-aware scientist dialogue. Phase 9 adds a transparent deterministic gameplay score and report for terminal missions; the score is not a real-world mission-quality measure.
 
 ## Technology and runtime
 
@@ -29,6 +29,8 @@ M/
 │   ├── resources.js     # Pure resource accounting, operations, validation, and events
 │   ├── mission.js       # Lifecycle, waypoint operations, samples, observations, and progress
 │   ├── challenges.js    # Deterministic challenge lifecycle, triggers, and evaluation
+│   ├── scientist.js     # Progressive Dr. Chen dialogue definitions, triggers, and history
+│   ├── evaluation.js    # Terminal mission scoring, report, assessment, and recommendations
 │   └── ui.js            # DOM rendering, event delegation, view navigation
 ├── tests/
 │   ├── rover.test.js    # Rover calculation and validation tests
@@ -37,12 +39,14 @@ M/
 │   ├── planning.test.js # Mission plan estimate and validation tests
 │   ├── planning-state.test.js # Plan state freshness and navigation guard tests
 │   ├── mission.test.js  # Mission execution and resource integration tests
-│   └── challenges.test.js # Challenge triggers, decisions, recovery, and state tests
+│   ├── challenges.test.js # Challenge triggers, decisions, recovery, and state tests
+│   ├── scientist.test.js # Dialogue triggers, progression, history, and state tests
+│   └── evaluation.test.js # Scoring, reports, recommendations, and state integration
 ├── README.md
 └── PROJECT_CONTEXT.md
 ```
 
-`mission.js` is the active pure execution/domain module; it coordinates `planning.js`, `rover.js`, `resources.js`, and `challenges.js` without owning app state or rendering DOM. `scientist.js` and `evalauation.js` remain outside the current phase. The evaluation filename appears misspelled; resolve it only when that later module is implemented. No framework or third-party dependency is used.
+`mission.js` is the pure execution/domain module; it coordinates `planning.js`, `rover.js`, `resources.js`, and `challenges.js` without owning app state or rendering DOM. `scientist.js` is also a pure domain module; it derives one-time dialogue unlocks from state stages and mission event records. `evaluation.js` is a read-only deterministic calculation/report module. `state.js` caches its report once when a mission becomes completed, aborted, or failed. The empty legacy misspelling `evalauation.js` was removed in favor of the correctly named module. No framework or third-party dependency is used.
 
 ## Implemented screens
 
@@ -50,20 +54,20 @@ M/
 2. Mission briefing with mission profile, settlement rationale, four scientific objectives, and constraints.
 3. Four local player slots and Aerospace Engineer, Mars Satellite Controller, Finance Administrator, and Mission Designer role cards.
 4. Mission planning with editable profile/name/duration, landing-site context, ranked objectives, resource estimates, strategy guidance, deterministic risks, validation, recommendations, and readiness.
-5. Rover design studio with CSS/SVG schematic, live mass/cost/power/payload/reliability indicators, chassis/mobility/power/instrument/communication/landing selection, reset, validation, science coverage, terrain-fit indicator, and role guidance.
+5. Rover design studio with CSS/SVG schematic, live mass/cost/power/payload/reliability indicators, manual component selection, a least-cost valid **Build Recommended Rover** action, per-component explanations, reset, validation, science coverage, terrain-fit indicator, and role guidance.
 6. Mission control with lifecycle controls, waypoint navigation, resource costs, sample inventory, capability-specific observations, objective progress, science logs, mission events, active challenges, and equipment status.
 7. Mission-linked Challenge Center with decisions, consequence previews, equipment recovery, challenge history, and configured performance evaluation.
-8. Dr. Chen profile, fixed educational dialogue, and regolith science note.
-9. Mission results layout with objective, resource, engineering, and evaluation placeholders.
+8. Dr. Chen profile and progressive mission-context dialogue with a message queue, Continue action, and viewed transcript.
+9. Mission results report with terminal score/grade, category breakdown, mission history, resources, challenges, rover condition, Dr. Chen final assessment, and recommendations.
 10. Mission archive, How to Play, Settings, and Credits.
 
 ## Navigation and state
 
-The primary path is `home → briefing → roles → planning → rover → control → challenge → scientist → results`. Buttons advance only along defined transitions. Back buttons and Escape use the state history; a persistent Main Menu action returns to the home screen. Mission profiles opened from the archive use the same briefing workflow.
+The primary path is `home → briefing → roles → planning → rover → control → challenge → scientist → results`. A Dr. Chen channel shortcut is also available after mission acceptance and during setup/operations. Buttons advance only along defined transitions. Back buttons and Escape use the state history; a persistent Main Menu action returns to the home screen. Mission profiles opened from the archive use the same briefing workflow.
 
-`state.js` owns the frozen snapshots and guarded transitions. It tracks the selected profile, local roles, mission-plan configuration and validation, landing site, rover configuration, resources, execution status/location/destination/movement/sample/observation/objective/event history, challenge history/evaluation, equipment condition, and display preference. State publication rebuilds the planning report from current inputs. Entering Mission Control requires fresh full-plan and rover validation, initializes resources and execution once, and starts the active field session. Rover and mission-plan configuration lock after resource initialization. Operations publish new frozen snapshots; rejected operations leave mission and resource state unchanged. These selections are not persisted. At least one role assignment is required to continue to planning; unused slots are permitted.
+`state.js` owns the frozen snapshots and guarded transitions. It tracks the selected profile, local roles, mission-plan configuration and validation, landing site, rover configuration, resources, execution status/location/destination/movement/sample/observation/objective/event history, challenge history/evaluation, scientist-dialogue queue/history, terminal mission evaluation, equipment condition, and display preference. State publication rebuilds the planning report, synchronizes dialogue unlocks from current mission facts, and creates a mission evaluation only for a terminal execution with no cached report. Entering Mission Control requires fresh full-plan and rover validation, initializes resources and execution once, and starts the active field session. Rover and mission-plan configuration lock after resource initialization. Operations publish new frozen snapshots; rejected operations leave mission and resource state unchanged. Dialogue advancement only updates its own queue and transcript, never mission execution or resources. Evaluation does not modify resources. These selections are not persisted. At least one role assignment is required to continue to planning; unused slots are permitted.
 
-`data.js` owns the mission/component catalogs, science capability requirements, surface waypoints, challenge rules, completion requirements, and gameplay parameters. `rover.js` contains pure calculation/validation functions. `planning.js` derives estimates, risks, and readiness from existing catalogs and rover/resource APIs. `resources.js` owns battery, cost, data, time, and payload accounting. `mission.js` owns pure execution operations and records; it consumes validated plans, rover metrics, resource functions, and the challenge engine. `challenges.js` owns pure deterministic trigger/lifecycle/evaluation functions. `ui.js` renders views and delegates events. `main.js` initializes UI/loading.
+`data.js` owns the mission/component catalogs, science capability requirements, surface waypoints, challenge rules, completion requirements, and gameplay parameters. `rover.js` contains pure calculation/validation functions and an exhaustive catalog-backed recommended build search. The search covers only selected science objectives, requires selected-site mobility coverage, evaluates candidates with the normal rover validator, and chooses the lowest-cost passing configuration; it reports the nearest candidate's blocking constraints if none pass. The UI applies the returned selection through existing rover state actions and retains manual controls. `planning.js` derives estimates, risks, and readiness from existing catalogs and rover/resource APIs. `resources.js` owns battery, cost, data, time, and payload accounting. `mission.js` owns pure execution operations and records; it consumes validated plans, rover metrics, resource functions, and the challenge engine. `challenges.js` owns pure deterministic trigger/lifecycle/evaluation functions. `scientist.js` owns centralized Dr. Chen dialogue, deterministic trigger matching, message progression, and transcript records. `ui.js` renders views and delegates events. `main.js` initializes UI/loading.
 
 ## Mission planning and validation
 
@@ -129,6 +133,30 @@ The map is not based on actual Mars surface data. Movement is not physics, colle
 
 Challenge effects use deterministic simplified rules. They do not predict actual storms, temperatures, component failures, field repair times, or solar output. All consequence values and the evaluation metric are illustrative.
 
+## Progressive scientist dialogue
+
+`scientist.js` contains Dr. Chen's centralized dialogue catalog, trigger matcher, immutable queue updates, and viewed transcript. Definitions include dialogue ID, speaker, category, mission stage, trigger conditions, priority, display status, and unlock conditions across all ten configured categories. The state layer synchronizes this queue from accepted mission stages, execution events for waypoint movement/observations/samples/challenges/objective progress/completion, and the live battery resource snapshot.
+
+The UI presents one available message at a time and records it as viewed only when Continue is activated. Mission Control previews the next message and the science-channel shortcut is available after mission acceptance. Dialogue synchronization and advancement do not change resource or mission execution snapshots. Content provides educational context on geology, water/ice evidence, minerals, regolith, atmosphere, radiation, habitability, instruments, dust, and sample interpretation; it does not report simulated measurements as discoveries or real NASA values. No external AI service is used.
+
+## Mission evaluation and scoring
+
+`evaluation.js` accepts mission execution/resource snapshots and rejects nonterminal records. It performs no resource updates. State publication caches one immutable report on `COMPLETED`, `ABORTED`, or `FAILED` status; a new mission clears that cache. The Results renderer consumes the cached report only and shows an explicit unavailable state before termination.
+
+Scores use these fixed category maxima (100 points total):
+
+| Category | Maximum | Deterministic basis |
+|---|---:|---|
+| Scientific Achievement | 25 | Completed selected objectives ÷ selected objectives × 25 |
+| Mission Efficiency | 15 | Remaining-time fraction × 7.5 + remaining-budget fraction × 7.5; at least one successful operation is required |
+| Resource Management | 15 | Remaining battery fraction × 10 + available-power/load ratio × 5 |
+| Rover Performance | 10 | Operational status fraction across recorded wheels, communications, instruments, and power generation |
+| Risk Management | 15 | Resolved challenges ÷ encountered challenges × 10 + average configured response stewardship × 5 |
+| Exploration | 10 | Unique reached waypoints at the selected site ÷ configured site waypoints × 10 |
+| Mission Completion | 10 | Objective completion fraction × 5 + met exploration/transmission requirements fraction × 3 + completed terminal event × 2 |
+
+Category scores are bounded by their maxima; the total is rounded to an integer. Grades are S (95–100), A (85–94), B (70–84), C (50–69), and D (0–49). The report contains objective status, resource consumed/remaining values, challenge/equipment histories, exploration, observations, samples, mission duration, a deterministic terminal event/execution reference, score explanations, and recommendations derived from measured weaknesses. Dr. Chen's final assessment summarizes the computed scientific and operational scores plus major recorded successes/failures. Missing data earns no unsupported points and is reported as unavailable/zero rather than fabricated. These scoring formulas are illustrative classroom rules, not validated scientific or mission-success criteria.
+
 ## Verification
 
 Run the built-in Node test suite from the project root:
@@ -137,9 +165,9 @@ Run the built-in Node test suite from the project root:
 node --experimental-default-type=module --test tests/*.test.js
 ```
 
-Tests exercise initial/incomplete and valid rover builds, component sums, rover limits and science coverage, resource power/energy/battery/budget/data/time behavior, planning/readiness and mission-control guards, mission initialization, movement and atomic resource failures, sample availability/payload, scientific capability progress, deterministic challenge triggers/decisions, equipment recovery, challenge resource accounting, completion requirements, and immutable execution state.
+Tests exercise initial/incomplete and valid rover builds, recommended rover coverage/cost/constraints and explanations, component sums, rover limits and science coverage, resource power/energy/battery/budget/data/time behavior, planning/readiness and mission-control guards, mission initialization, movement and atomic resource failures, sample availability/payload, scientific capability progress, deterministic challenge triggers/decisions, equipment recovery, challenge resource accounting, scientist stage/event triggers, dialogue ordering/history/reset and non-interference, evaluation categories/bounds/grades, reports and recommendations, terminal state caching, completion requirements, and immutable state.
 
-Current verification: **80 Node.js tests passed, 0 failed**. Browser verification should include entering Mission Control, triggering the dust event with a science operation, resolving a decision, and checking the resource and challenge history display.
+Current verification: **105 Node.js tests passed, 0 failed**. The DOM integration is covered through state/action routing and selector-based code paths; manual browser verification has not been performed.
 
 ## Visual and accessibility direction
 
@@ -147,15 +175,15 @@ The interface uses deep-space/navy surfaces, Mars-orange accents, technical labe
 
 ## Explicit limitations
 
-- Rover calculations, surface routes, sample classifications, challenge triggers, and resource parameters are illustrative; no rover physics, validated thermal model, actual aerospace qualification, or mission-success scoring is modeled.
+- Rover calculations, surface routes, sample classifications, challenge triggers, resource parameters, and the evaluation rubric are illustrative; no rover physics, validated thermal model, actual aerospace qualification, or real mission-quality scoring is modeled.
 - Mission Control runs deterministic waypoint navigation, sample inventory, objective capability progress, and resource transactions, but the surface map is not actual Mars topography and movement does not simulate physical terrain.
 - Observations and sample descriptions are illustrative records only; no measurements, discoveries, or scientific conclusions are generated.
 - Challenge consequences and equipment recovery use configured gameplay rules only; they are not weather forecasts, real component-failure probabilities, or field-repair procedures.
-- Dr. Chen content is fixed, not a branching dialogue system.
-- Results do not claim success or failure and do not award a score.
+- Dr. Chen dialogue is deterministic and trigger-based, not free-text or AI-generated branching. Dialogue choices do not affect mission outcomes.
+- Mission evaluation is a configured educational rubric over recorded simulation events, not a validated measure of real mission quality or scientific merit.
 - Four player slots share one in-memory browser session. There is no network multiplayer, authentication, or persistence.
 
 ## Scope boundary
 
-Phase 7 adds deterministic environmental/equipment challenges, real in-app resource consequences, equipment condition/recovery, challenge history, and a configured challenge-performance indicator. It does not implement actual scientific findings, mission-success scoring, progressive scientist dialogue, or results evaluation.
+Phase 7 adds deterministic environmental/equipment challenges, in-app resource consequences, equipment condition/recovery, challenge history, and a configured challenge-performance indicator. Phase 8 adds progressive event-driven Dr. Chen dialogue. Phase 9 adds deterministic terminal mission scoring and reporting; it does not generate actual scientific findings. Phase 10 is not implemented.
 `
